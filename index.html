@@ -79,31 +79,29 @@ startBtn.addEventListener('click', async () => {
       stopBtn.disabled = true;
     });
 
-    function draw() {
-      rafId = requestAnimationFrame(draw);
-      if (!analyser) return;
+function draw() {
+  rafId = requestAnimationFrame(draw);
+  if (!analyser) return;
 
-      analyser.getByteFrequencyData(dataArray);
+  analyser.getByteFrequencyData(dataArray);
 
-      // Clear
-      ctx.fillStyle = '#000';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Bars
-      const barCount = bufferLength;
-      const barWidth = Math.floor(canvas.width / barCount);
-      const gap = 1;
-      const width = barWidth - gap;
+  const barCount = bufferLength;
+  const barWidth = Math.max(1, Math.floor(canvas.width / barCount));
+  const gap = 0;
+  const width = Math.max(1, barWidth - gap);
 
-      for (let i = 0; i < barCount; i++) {
-        const mag = dataArray[i] / 255;
-        const barH = mag * canvas.height;
-        const x = i * barWidth;
-        const y = canvas.height - barH;
-        ctx.fillStyle = barColor;
-        ctx.fillRect(x, y, width, barH);
-      }
-    }
+  for (let i = 0; i < barCount; i++) {
+    const mag = dataArray[i] / 255;
+    const barH = mag * canvas.height;
+    const x = i * barWidth;
+    const y = canvas.height - barH;
+    ctx.fillStyle = barColor;
+    ctx.fillRect(x, y, width, barH);
+  }
+}
   </script>
 </body>
 </html>
