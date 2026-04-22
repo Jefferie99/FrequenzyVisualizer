@@ -2,106 +2,263 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Real-Time Frequency Visualizer (Public Overlay)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Frequency Visualizer</title>
   <style>
-    body { margin:0; background:#111; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; color:#fff; }
-    #canvas { width:100%; height:420px; display:block; background:#000; }
-    .controls { position: absolute; top: 10px; left: 10px; display:flex; gap:8px; background: rgba(0,0,0,0.4); padding:8px; border-radius:6px; }
-    select, input { padding:6px 8px; border-radius:6px; border:1px solid #333; background:#222; color:#fff; }
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: #111;
+      color: white;
+      font-family: Arial, sans-serif;
+      overflow: hidden;
+    }
+
+    .controls {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      z-index: 10;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      background: rgba(0, 0, 0, 0.6);
+      padding: 10px 12px;
+      border-radius: 10px;
+    }
+
+    button, select, input[type="color"] {
+      padding: 8px 10px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    button {
+      cursor: pointer;
+      background: #2b2b2b;
+      color: white;
+    }
+
+    button:hover {
+      background: #3b3b3b;
+    }
+
+    label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 14px;
+    }
+
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      background: black;
+    }
+
+    #status {
+      position: fixed;
+      bottom: 12px;
+      left: 12px;
+      z-index: 10;
+      background: rgba(0,0,0,0.6);
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-size: 14px;
+      color: #ccc;
+    }
   </style>
 </head>
 <body>
-  <div class="controls" aria-label="Controls">
+  <div class="controls">
     <button id="startBtn">Start</button>
     <button id="stopBtn" disabled>Stop</button>
-    <label>FFT size
+
+    <label>
+      FFT size
       <select id="fftSizeSelect">
-        <option value="1024">1024</option>
-        <option value="2048" selected>2048</option>
+        <option value="1024" selected>1024</option>
+        <option value="2048">2048</option>
         <option value="4096">4096</option>
       </select>
     </label>
-    <label>Bar color
-      <input type="color" id="colorPicker" value="#00ff00">
+
+    <label>
+      Color
+      <input type="color" id="colorPicker" value="#00ff66" />
     </label>
   </div>
 
-  <canvas id="canvas" width="1280" height="420"></canvas>
+  <canvas id="canvas"></canvas>
+  <div id="status">Idle</div>
 
   <script>
-    let audioCtx, analyser, dataArray, bufferLength;
-    let sourceNode;
-    let rafId;
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    const startBtn = document.getElementById('startBtn');
-    const stopBtn = document.getElementById('stopBtn');
-    const fftSizeSelect = document.getElementById('fftSizeSelect');
-    const colorPicker = document.getElementById('colorPicker');
-    let barColor = colorPicker.value;
-    colorPicker.addEventListener('input', (e) => { barColor = e.target.value; });
+    let audioCtx = null;
+    let analyser = null;
+    let sourceNode = null;
+    let silentGain = null;
+    let mediaStream = null;
+    let rafId = null;
+    let dataArray = null;
 
-startBtn.addEventListener('click', async () => {
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  // Ensure the audio context is running
-  if (audioCtx.state === 'suspended') await audioCtx.resume();
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
 
-  analyser = audioCtx.createAnalyser();
-  analyser.fftSize = parseInt(fftSizeSelect.value, 10);
-  bufferLength = analyser.frequencyBinCount;
-  dataArray = new Uint8Array(bufferLength);
+    const startBtn = document.getElementById("startBtn");
+    const stopBtn = document.getElementById("stopBtn");
+    const fftSizeSelect = document.getElementById("fftSizeSelect");
+    const colorPicker = document.getElementById("colorPicker");
+    const statusEl = document.getElementById("status");
 
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    sourceNode = audioCtx.createMediaStreamSource(stream);
-    sourceNode.connect(analyser);
-    // Optional: analyser.connect(audioCtx.destination);
-  } catch (err) {
-    console.error('Mic access error:', err);
-    alert('Could not access microphone: ' + err.message);
-    return;
-  }
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
 
-  startBtn.disabled = true;
-  stopBtn.disabled = false;
-  draw();
-});
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
 
-    stopBtn.addEventListener('click', () => {
-      if (rafId) cancelAnimationFrame(rafId);
+    function setStatus(text) {
+      statusEl.textContent = text;
+    }
+
+    async function startVisualizer() {
+      try {
+        setStatus("Requesting microphone...");
+
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        if (audioCtx.state === "suspended") {
+          await audioCtx.resume();
+        }
+
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false
+          }
+        });
+
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = parseInt(fftSizeSelect.value, 10);
+        analyser.smoothingTimeConstant = 0.8;
+        analyser.minDecibels = -90;
+        analyser.maxDecibels = -10;
+
+        dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+        sourceNode = audioCtx.createMediaStreamSource(mediaStream);
+
+        // Silent output so Chrome keeps the audio graph alive
+        silentGain = audioCtx.createGain();
+        silentGain.gain.value = 0;
+
+        sourceNode.connect(analyser);
+        analyser.connect(silentGain);
+        silentGain.connect(audioCtx.destination);
+
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+
+        setStatus("Mic running ✅");
+        draw();
+      } catch (err) {
+        console.error(err);
+        setStatus("Mic error: " + err.message);
+        alert("Microphone error: " + err.message);
+      }
+    }
+
+    function stopVisualizer() {
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+
       if (sourceNode) {
         try { sourceNode.disconnect(); } catch (e) {}
+        sourceNode = null;
       }
+
       if (analyser) {
         try { analyser.disconnect(); } catch (e) {}
+        analyser = null;
       }
+
+      if (silentGain) {
+        try { silentGain.disconnect(); } catch (e) {}
+        silentGain = null;
+      }
+
+      if (mediaStream) {
+        mediaStream.getTracks().forEach(track => track.stop());
+        mediaStream = null;
+      }
+
       startBtn.disabled = false;
       stopBtn.disabled = true;
+      setStatus("Stopped");
+      
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "black";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
+    function draw() {
+      rafId = requestAnimationFrame(draw);
+
+      if (!analyser || !dataArray) return;
+
+      analyser.getByteFrequencyData(dataArray);
+
+      ctx.fillStyle = "black";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const barColor = colorPicker.value;
+
+      // Draw a fixed number of visible bars
+      const visibleBars = 128;
+      const step = Math.max(1, Math.floor(dataArray.length / visibleBars));
+      const barWidth = canvas.width / visibleBars;
+
+      for (let i = 0; i < visibleBars; i++) {
+        let sum = 0;
+        for (let j = 0; j < step; j++) {
+          const index = i * step + j;
+          if (index < dataArray.length) {
+            sum += dataArray[index];
+          }
+        }
+
+        const average = sum / step;
+        const barHeight = (average / 255) * canvas.height;
+
+        const x = i * barWidth;
+        const y = canvas.height - barHeight;
+
+        ctx.fillStyle = barColor;
+        ctx.fillRect(x, y, Math.max(2, barWidth - 2), barHeight);
+      }
+    }
+
+    startBtn.addEventListener("click", startVisualizer);
+    stopBtn.addEventListener("click", stopVisualizer);
+
+    fftSizeSelect.addEventListener("change", () => {
+      if (analyser) {
+        analyser.fftSize = parseInt(fftSizeSelect.value, 10);
+        dataArray = new Uint8Array(analyser.frequencyBinCount);
+      }
     });
-
-function draw() {
-  rafId = requestAnimationFrame(draw);
-  if (!analyser) return;
-
-  analyser.getByteFrequencyData(dataArray);
-
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  const barCount = bufferLength;
-  const barWidth = Math.max(1, Math.floor(canvas.width / barCount));
-  const gap = 0;
-  const width = Math.max(1, barWidth - gap);
-
-  for (let i = 0; i < barCount; i++) {
-    const mag = dataArray[i] / 255;
-    const barH = mag * canvas.height;
-    const x = i * barWidth;
-    const y = canvas.height - barH;
-    ctx.fillStyle = barColor;
-    ctx.fillRect(x, y, width, barH);
-  }
-}
   </script>
 </body>
 </html>
