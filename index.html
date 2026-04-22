@@ -42,25 +42,30 @@
     colorPicker.addEventListener('input', (e) => { barColor = e.target.value; });
 
     startBtn.addEventListener('click', async () => {
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      analyser = audioCtx.createAnalyser();
-      analyser.fftSize = parseInt(fftSizeSelect.value, 10);
-      bufferLength = analyser.frequencyBinCount;
-      dataArray = new Uint8Array(bufferLength);
-
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        sourceNode = audioCtx.createMediaStreamSource(stream);
-        sourceNode.connect(analyser);
-      } catch (err) {
-        console.error('Mic access error:', err);
-        alert('Could not access microphone: ' + err.message);
-        return;
-      }
-
-      startBtn.disabled = true;
-      stopBtn.disabled = false;
-      draw();
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    // Ensure the audio context is running
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+    
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = parseInt(fftSizeSelect.value, 10);
+    bufferLength = analyser.frequencyBinCount;
+    dataArray = new Uint8Array(bufferLength);
+    
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      sourceNode = audioCtx.createMediaStreamSource(stream);
+      sourceNode.connect(analyser);
+      // Optional: connect to destination if you want to hear mic (not required for visuals)
+      // analyser.connect(audioCtx.destination);
+    } catch (err) {
+      console.error('Mic access error:', err);
+      alert('Could not access microphone: ' + err.message);
+      return;
+    }
+    
+    startBtn.disabled = true;
+    stopBtn.disabled = false;
+    draw();
     });
 
     stopBtn.addEventListener('click', () => {
