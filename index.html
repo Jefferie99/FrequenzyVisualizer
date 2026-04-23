@@ -26,7 +26,7 @@
       gap: 10px;
       align-items: center;
       flex-wrap: wrap;
-      background: rgba(0, 0, 0, 0.7);
+      background: rgba(0, 0, 0, 0.72);
       padding: 10px 12px;
       border-radius: 12px;
       backdrop-filter: blur(6px);
@@ -68,7 +68,7 @@
       bottom: 12px;
       left: 12px;
       z-index: 10;
-      background: rgba(0,0,0,0.7);
+      background: rgba(0,0,0,0.72);
       padding: 8px 10px;
       border-radius: 8px;
       font-size: 14px;
@@ -78,6 +78,10 @@
 
     #deviceSelect {
       max-width: 260px;
+    }
+
+    #visualizerSelect {
+      min-width: 140px;
     }
   </style>
 </head>
@@ -103,10 +107,14 @@
     <label>
       Visualizer
       <select id="visualizerSelect">
-        <option value="bars" selected>Bars</option>
+        <option value="bars">Bars</option>
         <option value="mirror">Mirror</option>
         <option value="circle">Circle</option>
         <option value="wave">Wave</option>
+        <option value="dots">Dots</option>
+        <option value="starburst">Starburst</option>
+        <option value="tunnel">Tunnel</option>
+        <option value="mountain">Mountain</option>
       </select>
     </label>
 
@@ -158,10 +166,16 @@
       statusEl.textContent = text;
     }
 
+    function hexToRgb(hex) {
+      return {
+        r: parseInt(hex.slice(1, 3), 16),
+        g: parseInt(hex.slice(3, 5), 16),
+        b: parseInt(hex.slice(5, 7), 16)
+      };
+    }
+
     function hexToRgba(hex, alpha) {
-      const r = parseInt(hex.slice(1, 3), 16);
-      const g = parseInt(hex.slice(3, 5), 16);
-      const b = parseInt(hex.slice(5, 7), 16);
+      const { r, g, b } = hexToRgb(hex);
       return `rgba(${r}, ${g}, ${b}, ${alpha})`;
     }
 
@@ -169,6 +183,21 @@
       if (!analyser) return;
       freqData = new Uint8Array(analyser.frequencyBinCount);
       timeData = new Uint8Array(analyser.fftSize);
+    }
+
+    function averageBand(start, size) {
+      let sum = 0;
+      let count = 0;
+
+      for (let i = 0; i < size; i++) {
+        const index = start + i;
+        if (index < freqData.length) {
+          sum += freqData[index];
+          count++;
+        }
+      }
+
+      return count ? sum / count : 0;
     }
 
     async function loadDevices() {
@@ -253,7 +282,7 @@
 
         analyser = audioCtx.createAnalyser();
         analyser.fftSize = parseInt(fftSizeSelect.value, 10);
-        analyser.smoothingTimeConstant = 0.82;
+        analyser.smoothingTimeConstant = 0.84;
         analyser.minDecibels = -90;
         analyser.maxDecibels = -10;
 
@@ -298,16 +327,19 @@
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
 
-    function clearCanvasWithTrail(alpha = 0.16) {
+    function clearSolid() {
+      ctx.fillStyle = "black";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
+    function clearTrail(alpha = 0.14) {
       ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
 
     function drawBars(color) {
       analyser.getByteFrequencyData(freqData);
-
-      ctx.fillStyle = "black";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      clearSolid();
 
       const visibleBars = 128;
       const step = Math.max(1, Math.floor(freqData.length / visibleBars));
@@ -317,20 +349,8 @@
       ctx.shadowColor = color;
 
       for (let i = 0; i < visibleBars; i++) {
-        let sum = 0;
-        let count = 0;
-
-        for (let j = 0; j < step; j++) {
-          const index = i * step + j;
-          if (index < freqData.length) {
-            sum += freqData[index];
-            count++;
-          }
-        }
-
-        const average = count > 0 ? sum / count : 0;
+        const average = averageBand(i * step, step);
         const barHeight = (average / 255) * canvas.height;
-
         const x = i * barWidth;
         const y = canvas.height - barHeight;
 
@@ -343,7 +363,7 @@
 
     function drawMirror(color) {
       analyser.getByteFrequencyData(freqData);
-      clearCanvasWithTrail(0.18);
+      clearTrail(0.18);
 
       const visibleBars = 96;
       const step = Math.max(1, Math.floor(freqData.length / visibleBars));
@@ -355,20 +375,8 @@
       ctx.fillStyle = color;
 
       for (let i = 0; i < visibleBars; i++) {
-        let sum = 0;
-        let count = 0;
-
-        for (let j = 0; j < step; j++) {
-          const index = i * step + j;
-          if (index < freqData.length) {
-            sum += freqData[index];
-            count++;
-          }
-        }
-
-        const average = count > 0 ? sum / count : 0;
+        const average = averageBand(i * step, step);
         const size = (average / 255) * (canvas.height * 0.42);
-
         const x = i * barWidth;
         const w = Math.max(2, barWidth - 2);
 
@@ -381,12 +389,11 @@
 
     function drawCircle(color) {
       analyser.getByteFrequencyData(freqData);
-      clearCanvasWithTrail(0.12);
+      clearTrail(0.12);
 
       const cx = canvas.width / 2;
       const cy = canvas.height / 2;
       const radius = Math.min(canvas.width, canvas.height) * 0.18;
-
       const points = 180;
       const step = Math.max(1, Math.floor(freqData.length / points));
 
@@ -398,21 +405,10 @@
       ctx.shadowColor = color;
 
       for (let i = 0; i < points; i++) {
-        let sum = 0;
-        let count = 0;
-
-        for (let j = 0; j < step; j++) {
-          const index = i * step + j;
-          if (index < freqData.length) {
-            sum += freqData[index];
-            count++;
-          }
-        }
-
-        const average = count > 0 ? sum / count : 0;
+        const average = averageBand(i * step, step);
         const extra = (average / 255) * (Math.min(canvas.width, canvas.height) * 0.22);
-
         const angle = (i / points) * Math.PI * 2;
+
         const x1 = Math.cos(angle) * radius;
         const y1 = Math.sin(angle) * radius;
         const x2 = Math.cos(angle) * (radius + extra);
@@ -436,7 +432,7 @@
 
     function drawWave(color) {
       analyser.getByteTimeDomainData(timeData);
-      clearCanvasWithTrail(0.15);
+      clearTrail(0.15);
 
       ctx.beginPath();
       ctx.lineWidth = 3;
@@ -451,15 +447,157 @@
         const v = timeData[i] / 128.0;
         const y = (v * canvas.height) / 2;
 
-        if (i === 0) {
-          ctx.moveTo(x, y);
-        } else {
-          ctx.lineTo(x, y);
-        }
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
 
         x += sliceWidth;
       }
 
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+
+    function drawDots(color) {
+      analyser.getByteFrequencyData(freqData);
+      clearTrail(0.10);
+
+      const count = 96;
+      const step = Math.max(1, Math.floor(freqData.length / count));
+      const barWidth = canvas.width / count;
+
+      ctx.shadowBlur = 22;
+      ctx.shadowColor = color;
+
+      for (let i = 0; i < count; i++) {
+        const average = averageBand(i * step, step);
+        const norm = average / 255;
+        const x = i * barWidth + barWidth / 2;
+        const y = canvas.height - norm * canvas.height;
+        const r = 2 + norm * 12;
+
+        ctx.beginPath();
+        ctx.fillStyle = hexToRgba(color, 0.95);
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.fillStyle = hexToRgba(color, 0.25);
+        ctx.arc(x, y, r * 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.shadowBlur = 0;
+    }
+
+    function drawStarburst(color) {
+      analyser.getByteFrequencyData(freqData);
+      clearTrail(0.12);
+
+      const cx = canvas.width / 2;
+      const cy = canvas.height / 2;
+      const baseRadius = Math.min(canvas.width, canvas.height) * 0.08;
+      const rays = 220;
+      const step = Math.max(1, Math.floor(freqData.length / rays));
+
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.lineCap = "round";
+      ctx.shadowBlur = 20;
+      ctx.shadowColor = color;
+
+      for (let i = 0; i < rays; i++) {
+        const average = averageBand(i * step, step);
+        const norm = average / 255;
+        const angle = (i / rays) * Math.PI * 2;
+        const inner = baseRadius;
+        const outer = inner + norm * Math.min(canvas.width, canvas.height) * 0.35;
+
+        ctx.beginPath();
+        ctx.strokeStyle = hexToRgba(color, 0.25 + norm * 0.75);
+        ctx.lineWidth = 1 + norm * 4;
+        ctx.moveTo(Math.cos(angle) * inner, Math.sin(angle) * inner);
+        ctx.lineTo(Math.cos(angle) * outer, Math.sin(angle) * outer);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+      ctx.shadowBlur = 0;
+    }
+
+    function drawTunnel(color) {
+      analyser.getByteFrequencyData(freqData);
+      clearTrail(0.08);
+
+      const cx = canvas.width / 2;
+      const cy = canvas.height / 2;
+      const rings = 12;
+      const maxRadius = Math.min(canvas.width, canvas.height) * 0.42;
+
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.shadowBlur = 18;
+      ctx.shadowColor = color;
+
+      for (let i = 0; i < rings; i++) {
+        const bandIndex = Math.floor((i / rings) * freqData.length * 0.7);
+        const average = averageBand(bandIndex, 8);
+        const norm = average / 255;
+        const radius = ((i + 1) / rings) * maxRadius + norm * 20;
+
+        ctx.beginPath();
+        ctx.strokeStyle = hexToRgba(color, 0.10 + (i / rings) * 0.45 + norm * 0.25);
+        ctx.lineWidth = 1 + norm * 4;
+        ctx.arc(0, 0, radius, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+      ctx.shadowBlur = 0;
+    }
+
+    function drawMountain(color) {
+      analyser.getByteFrequencyData(freqData);
+      clearTrail(0.16);
+
+      const points = 160;
+      const step = Math.max(1, Math.floor(freqData.length / points));
+      const baseline = canvas.height * 0.88;
+
+      ctx.beginPath();
+      ctx.moveTo(0, canvas.height);
+
+      for (let i = 0; i < points; i++) {
+        const average = averageBand(i * step, step);
+        const norm = average / 255;
+        const x = (i / (points - 1)) * canvas.width;
+        const y = baseline - norm * canvas.height * 0.65;
+        ctx.lineTo(x, y);
+      }
+
+      ctx.lineTo(canvas.width, canvas.height);
+      ctx.closePath();
+
+      const gradient = ctx.createLinearGradient(0, baseline - canvas.height * 0.6, 0, canvas.height);
+      gradient.addColorStop(0, hexToRgba(color, 0.85));
+      gradient.addColorStop(1, hexToRgba(color, 0.05));
+
+      ctx.fillStyle = gradient;
+      ctx.shadowBlur = 18;
+      ctx.shadowColor = color;
+      ctx.fill();
+
+      ctx.beginPath();
+      for (let i = 0; i < points; i++) {
+        const average = averageBand(i * step, step);
+        const norm = average / 255;
+        const x = (i / (points - 1)) * canvas.width;
+        const y = baseline - norm * canvas.height * 0.65;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2.5;
       ctx.stroke();
       ctx.shadowBlur = 0;
     }
@@ -472,15 +610,14 @@
       const color = colorPicker.value;
       const mode = visualizerSelect.value;
 
-      if (mode === "bars") {
-        drawBars(color);
-      } else if (mode === "mirror") {
-        drawMirror(color);
-      } else if (mode === "circle") {
-        drawCircle(color);
-      } else if (mode === "wave") {
-        drawWave(color);
-      }
+      if (mode === "bars") drawBars(color);
+      else if (mode === "mirror") drawMirror(color);
+      else if (mode === "circle") drawCircle(color);
+      else if (mode === "wave") drawWave(color);
+      else if (mode === "dots") drawDots(color);
+      else if (mode === "starburst") drawStarburst(color);
+      else if (mode === "tunnel") drawTunnel(color);
+      else if (mode === "mountain") drawMountain(color);
     }
 
     startBtn.addEventListener("click", async () => {
@@ -501,8 +638,7 @@
     });
 
     visualizerSelect.addEventListener("change", () => {
-      ctx.fillStyle = "black";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      clearSolid();
     });
 
     navigator.mediaDevices.addEventListener?.("devicechange", loadDevices);
