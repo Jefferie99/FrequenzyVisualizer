@@ -26,7 +26,7 @@
       gap: 10px;
       align-items: center;
       flex-wrap: wrap;
-      background: rgba(0, 0, 0, 0.6);
+      background: rgba(0, 0, 0, 0.65);
       padding: 10px 12px;
       border-radius: 10px;
     }
@@ -36,12 +36,12 @@
       border: none;
       border-radius: 6px;
       font-size: 14px;
+      background: #2b2b2b;
+      color: white;
     }
 
     button {
       cursor: pointer;
-      background: #2b2b2b;
-      color: white;
     }
 
     button:hover {
@@ -67,11 +67,15 @@
       bottom: 12px;
       left: 12px;
       z-index: 10;
-      background: rgba(0,0,0,0.6);
+      background: rgba(0,0,0,0.65);
       padding: 8px 10px;
       border-radius: 8px;
       font-size: 14px;
       color: #ccc;
+    }
+
+    #deviceSelect {
+      max-width: 260px;
     }
   </style>
 </head>
@@ -93,6 +97,15 @@
       Color
       <input type="color" id="colorPicker" value="#00ff66" />
     </label>
+
+    <label>
+      Device
+      <select id="deviceSelect">
+        <option value="">Default microphone</option>
+      </select>
+    </label>
+
+    <button id="changeDeviceBtn" disabled>Change device</button>
   </div>
 
   <canvas id="canvas"></canvas>
@@ -106,6 +119,7 @@
     let mediaStream = null;
     let rafId = null;
     let dataArray = null;
+    let currentDeviceId = "";
 
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
@@ -114,6 +128,8 @@
     const stopBtn = document.getElementById("stopBtn");
     const fftSizeSelect = document.getElementById("fftSizeSelect");
     const colorPicker = document.getElementById("colorPicker");
+    const deviceSelect = document.getElementById("deviceSelect");
+    const changeDeviceBtn = document.getElementById("changeDeviceBtn");
     const statusEl = document.getElementById("status");
 
     function resizeCanvas() {
@@ -128,57 +144,32 @@
       statusEl.textContent = text;
     }
 
-    async function startVisualizer() {
+    async function loadDevices() {
       try {
-        setStatus("Requesting microphone...");
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const audioInputs = devices.filter(device => device.kind === "audioinput");
 
-        if (!audioCtx) {
-          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        }
+        deviceSelect.innerHTML = "";
 
-        if (audioCtx.state === "suspended") {
-          await audioCtx.resume();
-        }
+        const defaultOption = document.createElement("option");
+        defaultOption.value = "";
+        defaultOption.textContent = "Default microphone";
+        deviceSelect.appendChild(defaultOption);
 
-        mediaStream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false
-          }
+        audioInputs.forEach((device, index) => {
+          const option = document.createElement("option");
+          option.value = device.deviceId;
+          option.textContent = device.label || `Microphone ${index + 1}`;
+          deviceSelect.appendChild(option);
         });
 
-        analyser = audioCtx.createAnalyser();
-        analyser.fftSize = parseInt(fftSizeSelect.value, 10);
-        analyser.smoothingTimeConstant = 0.8;
-        analyser.minDecibels = -90;
-        analyser.maxDecibels = -10;
-
-        dataArray = new Uint8Array(analyser.frequencyBinCount);
-
-        sourceNode = audioCtx.createMediaStreamSource(mediaStream);
-
-        // Silent output so Chrome keeps the audio graph alive
-        silentGain = audioCtx.createGain();
-        silentGain.gain.value = 0;
-
-        sourceNode.connect(analyser);
-        analyser.connect(silentGain);
-        silentGain.connect(audioCtx.destination);
-
-        startBtn.disabled = true;
-        stopBtn.disabled = false;
-
-        setStatus("Mic running ✅");
-        draw();
+        deviceSelect.value = currentDeviceId;
       } catch (err) {
-        console.error(err);
-        setStatus("Mic error: " + err.message);
-        alert("Microphone error: " + err.message);
+        console.error("Device load error:", err);
       }
     }
 
-    function stopVisualizer() {
+    function cleanupAudio() {
       if (rafId) {
         cancelAnimationFrame(rafId);
         rafId = null;
@@ -203,11 +194,79 @@
         mediaStream.getTracks().forEach(track => track.stop());
         mediaStream = null;
       }
+    }
+
+    async function startVisualizer(deviceId = "") {
+      try {
+        cleanupAudio();
+        setStatus("Requesting microphone...");
+
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        if (audioCtx.state === "suspended") {
+          await audioCtx.resume();
+        }
+
+        const constraints = {
+          audio: {
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false
+          }
+        };
+
+        if (deviceId) {
+          constraints.audio.deviceId = { exact: deviceId };
+        }
+
+        mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+
+        currentDeviceId = deviceId;
+
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = parseInt(fftSizeSelect.value, 10);
+        analyser.smoothingTimeConstant = 0.8;
+        analyser.minDecibels = -90;
+        analyser.maxDecibels = -10;
+
+        dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+        sourceNode = audioCtx.createMediaStreamSource(mediaStream);
+
+        silentGain = audioCtx.createGain();
+        silentGain.gain.value = 0;
+
+        sourceNode.connect(analyser);
+        analyser.connect(silentGain);
+        silentGain.connect(audioCtx.destination);
+
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        changeDeviceBtn.disabled = false;
+
+        await loadDevices();
+        deviceSelect.value = currentDeviceId;
+
+        setStatus("Mic running ✅");
+        draw();
+      } catch (err) {
+        console.error(err);
+        setStatus("Mic error: " + err.message);
+        alert("Microphone error: " + err.message);
+      }
+    }
+
+    function stopVisualizer() {
+      cleanupAudio();
 
       startBtn.disabled = false;
       stopBtn.disabled = true;
+      changeDeviceBtn.disabled = true;
+
       setStatus("Stopped");
-      
+
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.fillStyle = "black";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -224,22 +283,23 @@
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       const barColor = colorPicker.value;
-
-      // Draw a fixed number of visible bars
       const visibleBars = 128;
       const step = Math.max(1, Math.floor(dataArray.length / visibleBars));
       const barWidth = canvas.width / visibleBars;
 
       for (let i = 0; i < visibleBars; i++) {
         let sum = 0;
+        let count = 0;
+
         for (let j = 0; j < step; j++) {
           const index = i * step + j;
           if (index < dataArray.length) {
             sum += dataArray[index];
+            count++;
           }
         }
 
-        const average = sum / step;
+        const average = count > 0 ? sum / count : 0;
         const barHeight = (average / 255) * canvas.height;
 
         const x = i * barWidth;
@@ -250,8 +310,15 @@
       }
     }
 
-    startBtn.addEventListener("click", startVisualizer);
+    startBtn.addEventListener("click", async () => {
+      await startVisualizer(deviceSelect.value);
+    });
+
     stopBtn.addEventListener("click", stopVisualizer);
+
+    changeDeviceBtn.addEventListener("click", async () => {
+      await startVisualizer(deviceSelect.value);
+    });
 
     fftSizeSelect.addEventListener("change", () => {
       if (analyser) {
@@ -259,6 +326,10 @@
         dataArray = new Uint8Array(analyser.frequencyBinCount);
       }
     });
+
+    navigator.mediaDevices.addEventListener?.("devicechange", loadDevices);
+
+    loadDevices();
   </script>
 </body>
 </html>
