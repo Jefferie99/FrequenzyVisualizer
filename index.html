@@ -11,12 +11,13 @@
 
     :root {
       --bg: #040404;
-      --panel: rgba(8, 8, 10, 0.88);
+      --panel: rgba(6, 6, 8, 0.92);
       --border: rgba(255,255,255,0.07);
       --accent: #00ff88;
       --accent2: #ff2ea6;
+      --accent3: #ffa000;
       --text: #f0f0f0;
-      --muted: #888;
+      --muted: #666;
       --radius: 12px;
       --font-ui: 'Space Mono', monospace;
       --font-display: 'Syne', sans-serif;
@@ -39,7 +40,9 @@
       height: 100vh;
     }
 
-    /* ── CONTROLS PANEL ── */
+    /* ══════════════════════════════════
+       CONTROLS PANEL
+    ══════════════════════════════════ */
     #controls {
       position: fixed;
       top: 14px;
@@ -48,113 +51,202 @@
       z-index: 30;
       background: var(--panel);
       border: 1px solid var(--border);
-      border-radius: 16px;
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      padding: 10px 14px;
+      border-radius: 18px;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      padding: 0;
       display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      align-items: center;
-      transition: opacity 0.3s ease, transform 0.3s ease;
+      flex-direction: column;
+      gap: 0;
+      transition: opacity 0.35s ease, transform 0.35s ease;
+      overflow: hidden;
     }
 
     #controls.hidden {
       opacity: 0;
-      transform: translateY(-120%);
+      transform: translateY(-110%);
       pointer-events: none;
     }
 
-    /* Section label above groups */
-    .section-label {
-      font-family: var(--font-display);
-      font-size: 9px;
-      font-weight: 700;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--muted);
-      display: block;
-      margin-bottom: 4px;
-    }
-
-    .group {
-      display: flex;
-      flex-direction: column;
-      padding: 7px 10px;
-      border-radius: 10px;
-      background: rgba(255,255,255,0.03);
-      border: 1px solid rgba(255,255,255,0.05);
-      gap: 0;
-    }
-
-    .group-inner {
+    /* Top bar — status + actions */
+    #topbar {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
+      padding: 10px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
       flex-wrap: wrap;
     }
 
-    /* Pipeline stages — color coded */
-    .stage-input   { border-color: rgba(0, 200, 255, 0.15); }
-    .stage-behav   { border-color: rgba(255, 160, 0, 0.15); }
-    .stage-style   { border-color: rgba(0, 255, 136, 0.15); }
-    .stage-fx      { border-color: rgba(255, 46, 166, 0.15); }
-    .stage-color   { border-color: rgba(180, 100, 255, 0.15); }
-    .stage-ctrl    { border-color: rgba(255,255,255,0.05); }
+    /* Main pipeline row */
+    #pipeline {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      padding: 0;
+      flex-wrap: wrap;
+    }
 
-    .stage-input   .section-label { color: #00c8ff; }
-    .stage-behav   .section-label { color: #ffa000; }
-    .stage-style   .section-label { color: #00ff88; }
-    .stage-fx      .section-label { color: #ff2ea6; }
-    .stage-color   .section-label { color: #b464ff; }
+    /* Each stage block */
+    .stage {
+      display: flex;
+      flex-direction: column;
+      padding: 10px 14px;
+      gap: 7px;
+      border-right: 1px solid rgba(255,255,255,0.05);
+      flex: 1;
+      min-width: 0;
+    }
+    .stage:last-child { border-right: none; }
 
+    .stage-label {
+      font-family: var(--font-display);
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      white-space: nowrap;
+    }
+
+    .stage-label .dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .stage-behav  .stage-label .dot { background: #ffa000; box-shadow: 0 0 6px #ffa000; }
+    .stage-style  .stage-label .dot { background: #00ff88; box-shadow: 0 0 6px #00ff88; }
+    .stage-fx     .stage-label .dot { background: #ff2ea6; box-shadow: 0 0 6px #ff2ea6; }
+    .stage-color  .stage-label .dot { background: #b464ff; box-shadow: 0 0 6px #b464ff; }
+    .stage-tune   .stage-label .dot { background: #00c8ff; box-shadow: 0 0 6px #00c8ff; }
+
+    .stage-behav  .stage-label { color: #ffa000; }
+    .stage-style  .stage-label { color: #00ff88; }
+    .stage-fx     .stage-label { color: #ff2ea6; }
+    .stage-color  .stage-label { color: #b464ff; }
+    .stage-tune   .stage-label { color: #00c8ff; }
+
+    .stage-row {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      flex-wrap: wrap;
+    }
+
+    /* Advanced section — collapsed by default */
+    #advancedRow {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 14px;
+      border-top: 1px solid rgba(255,255,255,0.04);
+      flex-wrap: wrap;
+      background: rgba(0,0,0,0.2);
+    }
+    #advancedRow.open { display: flex; }
+
+    /* ── Inputs ── */
     select, button, input[type="color"] {
-      background: rgba(255,255,255,0.06);
+      background: rgba(255,255,255,0.05);
       color: var(--text);
       border: 1px solid rgba(255,255,255,0.08);
       border-radius: 8px;
       font-family: var(--font-ui);
       font-size: 12px;
-      padding: 6px 8px;
+      padding: 6px 9px;
       cursor: pointer;
       outline: none;
       transition: background 0.15s, border-color 0.15s;
+      white-space: nowrap;
     }
 
     select option {
-      background: #1a1a1a;
+      background: #181818;
       color: #f0f0f0;
     }
 
-    select:hover, button:hover {
-      background: rgba(255,255,255,0.10);
-      border-color: rgba(255,255,255,0.15);
-    }
+    select:hover, button:hover { background: rgba(255,255,255,0.09); border-color: rgba(255,255,255,0.14); }
+    select:focus, button:focus { border-color: rgba(255,255,255,0.2); }
 
-    select:focus { border-color: var(--accent); }
-
-    button.primary {
-      background: rgba(0,255,136,0.12);
-      border-color: rgba(0,255,136,0.3);
+    /* Start button — big and obvious */
+    #startBtn {
+      background: rgba(0,255,136,0.13);
+      border-color: rgba(0,255,136,0.35);
       color: var(--accent);
       font-weight: 700;
+      font-size: 13px;
+      padding: 7px 18px;
+      letter-spacing: 0.04em;
+      position: relative;
+      overflow: hidden;
     }
-    button.primary:hover {
+    #startBtn:not(:disabled):hover {
       background: rgba(0,255,136,0.22);
+      box-shadow: 0 0 16px rgba(0,255,136,0.2);
     }
-    button.primary:disabled {
-      opacity: 0.35;
-      cursor: default;
+    #startBtn:disabled { opacity: 0.3; cursor: default; }
+
+    /* Pulsing dot when active */
+    #startBtn.running::before {
+      content: '';
+      display: inline-block;
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--accent);
+      margin-right: 7px;
+      animation: pulse-dot 1.2s ease-in-out infinite;
+      vertical-align: middle;
     }
-    button.danger {
-      background: rgba(255,60,60,0.10);
-      border-color: rgba(255,60,60,0.25);
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.4; transform: scale(0.6); }
+    }
+
+    #stopBtn {
+      background: rgba(255,60,60,0.08);
+      border-color: rgba(255,60,60,0.22);
       color: #ff5555;
     }
-    button:disabled { opacity: 0.3; cursor: default; }
+    #stopBtn:hover { background: rgba(255,60,60,0.15); }
+
+    button:disabled { opacity: 0.28; cursor: default; pointer-events: none; }
+
+    /* Randomize button */
+    #randomBtn {
+      background: rgba(180,100,255,0.10);
+      border-color: rgba(180,100,255,0.25);
+      color: #b464ff;
+      font-size: 13px;
+    }
+    #randomBtn:hover { background: rgba(180,100,255,0.2); box-shadow: 0 0 12px rgba(180,100,255,0.2); }
+
+    /* Fullscreen button */
+    #fullscreenBtn {
+      background: rgba(255,255,255,0.04);
+      border-color: rgba(255,255,255,0.08);
+      color: var(--muted);
+      font-size: 14px;
+      padding: 6px 9px;
+    }
+    #fullscreenBtn:hover { color: var(--text); background: rgba(255,255,255,0.09); }
+
+    /* Advanced toggle */
+    #advancedBtn {
+      background: transparent;
+      border-color: rgba(255,255,255,0.06);
+      color: var(--muted);
+      font-size: 11px;
+      padding: 5px 9px;
+      margin-left: auto;
+    }
+    #advancedBtn:hover { color: var(--text); border-color: rgba(255,255,255,0.15); }
+    #advancedBtn.open { color: #00c8ff; border-color: rgba(0,200,255,0.25); }
 
     label {
-      font-size: 12px;
+      font-size: 11px;
       display: inline-flex;
       align-items: center;
       gap: 6px;
@@ -162,37 +254,38 @@
       color: var(--muted);
     }
 
+    /* Sliders */
     input[type="range"] {
       -webkit-appearance: none;
       appearance: none;
-      width: 100px;
+      width: 90px;
       height: 3px;
       border-radius: 2px;
-      background: rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.10);
       border: none;
       padding: 0;
       cursor: pointer;
     }
     input[type="range"]::-webkit-slider-thumb {
       -webkit-appearance: none;
-      width: 13px; height: 13px;
+      width: 12px; height: 12px;
       border-radius: 50%;
       background: var(--accent);
       cursor: pointer;
-      box-shadow: 0 0 6px rgba(0,255,136,0.5);
+      box-shadow: 0 0 5px rgba(0,255,136,0.5);
     }
     input[type="range"]::-moz-range-thumb {
-      width: 13px; height: 13px;
+      width: 12px; height: 12px;
       border-radius: 50%;
       background: var(--accent);
       border: none;
       cursor: pointer;
     }
+    #effectSlider::-webkit-slider-thumb { background: var(--accent2); box-shadow: 0 0 5px rgba(255,46,166,0.5); }
+    #effectSlider::-moz-range-thumb     { background: var(--accent2); }
 
-    /* Effect slider accent */
-    #effectSlider::-webkit-slider-thumb { background: var(--accent2); box-shadow: 0 0 6px rgba(255,46,166,0.5); }
-    #effectSlider::-moz-range-thumb { background: var(--accent2); }
-    #effectSlider { accent-color: var(--accent2); }
+    /* Hide intensity when behaviour is Rigid */
+    #intensityWrap.hidden-ctrl { display: none; }
 
     input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; }
 
@@ -200,70 +293,118 @@
       font-size: 11px;
       font-family: var(--font-ui);
       color: var(--muted);
-      min-width: 32px;
+      min-width: 28px;
       text-align: right;
     }
 
+    /* Status pill */
     .status-pill {
       font-size: 11px;
       font-family: var(--font-display);
       font-weight: 700;
-      letter-spacing: 0.06em;
-      padding: 5px 12px;
+      letter-spacing: 0.07em;
+      padding: 5px 13px;
       border-radius: 999px;
-      background: rgba(255,255,255,0.06);
-      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.07);
       color: var(--muted);
       white-space: nowrap;
+      transition: all 0.3s ease;
     }
     .status-pill.active {
       background: rgba(0,255,136,0.10);
-      border-color: rgba(0,255,136,0.3);
+      border-color: rgba(0,255,136,0.35);
       color: var(--accent);
+      box-shadow: 0 0 12px rgba(0,255,136,0.15);
+    }
+    .status-pill.error {
+      background: rgba(255,60,60,0.10);
+      border-color: rgba(255,60,60,0.3);
+      color: #ff5555;
     }
 
+    /* Device selector — highlight when not confirmed */
+    #deviceSelect.needs-apply {
+      border-color: rgba(255,160,0,0.5);
+      box-shadow: 0 0 8px rgba(255,160,0,0.2);
+    }
+
+    /* Band colour editors */
     #bandColorEditors {
       display: flex;
       align-items: center;
       gap: 5px;
       flex-wrap: wrap;
     }
-
     .band-editor {
       display: inline-flex;
       align-items: center;
-      gap: 4px;
-      font-size: 11px;
+      gap: 3px;
+      font-size: 10px;
       color: var(--muted);
     }
-
     .band-editor input[type="color"] {
-      width: 30px;
-      height: 26px;
+      width: 28px; height: 24px;
       padding: 2px;
-      border-radius: 6px;
+      border-radius: 5px;
     }
 
-    .hint {
+    /* Hint bar at bottom */
+    #hint {
       position: fixed;
       bottom: 14px;
       left: 50%;
       transform: translateX(-50%);
       z-index: 20;
       font-family: var(--font-ui);
-      font-size: 11px;
-      color: rgba(255,255,255,0.2);
-      letter-spacing: 0.08em;
+      font-size: 10px;
+      color: rgba(255,255,255,0.18);
+      letter-spacing: 0.10em;
       pointer-events: none;
-      transition: opacity 0.3s;
+      transition: opacity 0.4s;
+      white-space: nowrap;
     }
 
-    /* Pipeline flow indicator */
-    .pipe-arrow {
-      color: rgba(255,255,255,0.15);
-      font-size: 14px;
-      align-self: center;
-      padding-top: 16px;
+    /* Tooltip on ⓘ */
+    .tip {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      cursor: default;
+    }
+    .tip-icon {
+      font-size: 10px;
+      color: var(--muted);
+      opacity: 0.5;
+      margin-left: 2px;
+    }
+    .tip:hover .tip-text {
+      display: block;
+    }
+    .tip-text {
+      display: none;
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1a1a1a;
+      border: 1px solid rgba(255,255,255,0.12);
+      color: #ccc;
+      font-size: 11px;
+      font-family: var(--font-ui);
+      padding: 6px 10px;
+      border-radius: 8px;
+      white-space: nowrap;
+      z-index: 100;
+      pointer-events: none;
+    }
+
+    /* Divider between topbar items */
+    .divider {
+      width: 1px;
+      height: 22px;
+      background: rgba(255,255,255,0.07);
+      flex-shrink: 0;
     }
   </style>
 </head>
@@ -273,140 +414,177 @@
 
 <div id="controls">
 
-  <!-- STAGE 1: INPUT -->
-  <div class="group stage-input">
-    <span class="section-label">① Input</span>
-    <div class="group-inner">
-      <button id="startBtn" class="primary">Start</button>
-      <button id="stopBtn" class="danger" disabled>Stop</button>
-      <select id="deviceSelect" style="max-width:180px">
+  <!-- TOP BAR: transport + status + utility buttons -->
+  <div id="topbar">
+
+    <!-- Start / Stop -->
+    <button id="startBtn">▶ Start</button>
+    <button id="stopBtn" disabled>■ Stop</button>
+
+    <div class="divider"></div>
+
+    <!-- Device — auto-applies on change, no extra button needed -->
+    <div class="tip">
+      <select id="deviceSelect" style="max-width:200px" title="Select input device — changes apply immediately">
         <option value="">Default mic / VB Cable</option>
       </select>
-      <button id="changeDeviceBtn" disabled>⟳</button>
-      <select id="fftSizeSelect">
-        <option value="1024" selected>FFT 1024</option>
-        <option value="2048">FFT 2048</option>
-        <option value="4096">FFT 4096</option>
-      </select>
+      <span class="tip-icon">ⓘ</span>
+      <span class="tip-text">Select your VB Cable or mic here.<br>Changes apply instantly — no extra button needed.</span>
     </div>
+
+    <div class="divider"></div>
+
+    <!-- Randomize -->
+    <button id="randomBtn" title="Pick a random style, behaviour and palette">⚂ Random</button>
+
+    <!-- Fullscreen -->
+    <button id="fullscreenBtn" title="Toggle fullscreen (F)">⛶</button>
+
+    <div class="divider"></div>
+
+    <!-- Sensitivity -->
+    <label>
+      Sensitivity
+      <input type="range" id="sensitivitySlider" min="0.5" max="4" step="0.1" value="1.8" />
+      <span class="badge" id="sensitivityValue">1.8</span>
+    </label>
+
+    <!-- Advanced toggle -->
+    <button id="advancedBtn">Advanced ▾</button>
+
+    <!-- Auto-hide -->
+    <label style="margin-left:4px">
+      <input type="checkbox" id="autoHideChk" checked />
+      Auto-hide
+    </label>
+
+    <!-- Status pill — pushed to right -->
+    <span class="status-pill" id="statusBadge" style="margin-left:auto">Idle</span>
+
   </div>
 
-  <span class="pipe-arrow">▸</span>
+  <!-- PIPELINE ROW -->
+  <div id="pipeline">
 
-  <!-- STAGE 2: BEHAVIOUR -->
-  <div class="group stage-behav">
-    <span class="section-label">② Behaviour</span>
-    <div class="group-inner">
-      <select id="behaviourSelect">
-        <option value="rigid">Rigid</option>
-        <option value="wobbly">Wobbly</option>
-        <option value="bouncy">Bouncy</option>
-        <option value="breathing">Breathing</option>
-      </select>
-      <label>
-        Amount
-        <input type="range" id="effectSlider" min="0" max="100" step="1" value="40" />
-        <span class="badge" id="effectValue">40</span>
-      </label>
+    <!-- ② BEHAVIOUR -->
+    <div class="stage stage-behav">
+      <div class="stage-label"><span class="dot"></span>Behaviour</div>
+      <div class="stage-row">
+        <select id="behaviourSelect">
+          <option value="rigid">Rigid</option>
+          <option value="wobbly">Wobbly</option>
+          <option value="bouncy">Bouncy</option>
+          <option value="breathing">Breathing</option>
+        </select>
+        <span id="intensityWrap">
+          <label>
+            Intensity
+            <input type="range" id="effectSlider" min="0" max="100" step="1" value="40" />
+            <span class="badge" id="effectValue">40</span>
+          </label>
+        </span>
+      </div>
     </div>
+
+    <!-- ③ STYLE -->
+    <div class="stage stage-style">
+      <div class="stage-label"><span class="dot"></span>Style</div>
+      <div class="stage-row">
+        <select id="visualizerSelect">
+          <option value="bars">Bars</option>
+          <option value="mirror">Mirror</option>
+          <option value="circle">Circle</option>
+          <option value="starburst">Starburst</option>
+          <option value="tunnel">Tunnel</option>
+          <option value="skyline">Skyline</option>
+          <option value="dots">Dots</option>
+          <option value="wave">Wave</option>
+          <option value="mountain">Mountain</option>
+          <option value="orbit">Orbit</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- ④ POST FX -->
+    <div class="stage stage-fx">
+      <div class="stage-label"><span class="dot"></span>Post FX</div>
+      <div class="stage-row">
+        <select id="postFxSelect">
+          <option value="none">None</option>
+          <option value="bloom">Bloom</option>
+          <option value="rgbsplit">RGB Split</option>
+          <option value="scanlines">Scanlines</option>
+          <option value="vhs">VHS</option>
+          <option value="pixelate">Pixelate</option>
+        </select>
+        <label>
+          Trails
+          <input type="range" id="trailSlider" min="0" max="95" step="1" value="70" />
+          <span class="badge" id="trailValue">70</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- ⑤ COLOR -->
+    <div class="stage stage-color">
+      <div class="stage-label"><span class="dot"></span>Color</div>
+      <div class="stage-row">
+        <select id="modeSelect">
+          <option value="single">Single</option>
+          <option value="split" selected>Split</option>
+          <option value="heat">Heat</option>
+          <option value="pulse">Pulse</option>
+          <option value="rainbow">Rainbow</option>
+        </select>
+        <select id="paletteSelect">
+          <option value="custom">Custom</option>
+          <option value="neon" selected>Neon</option>
+          <option value="fire">Fire</option>
+          <option value="ocean">Ocean</option>
+          <option value="synthwave">Synthwave</option>
+          <option value="twitch">Twitch</option>
+          <option value="forest">Forest</option>
+          <option value="sunset">Sunset</option>
+          <option value="mono">Mono</option>
+        </select>
+        <div id="bandColorEditors"></div>
+      </div>
+    </div>
+
   </div>
 
-  <span class="pipe-arrow">▸</span>
-
-  <!-- STAGE 3: STYLE -->
-  <div class="group stage-style">
-    <span class="section-label">③ Style</span>
-    <div class="group-inner">
-      <select id="visualizerSelect">
-        <option value="bars">Bars</option>
-        <option value="mirror">Mirror</option>
-        <option value="circle">Circle</option>
-        <option value="starburst">Starburst</option>
-        <option value="tunnel">Tunnel</option>
-        <option value="skyline">Skyline</option>
-        <option value="dots">Dots</option>
-        <option value="wave">Wave</option>
-        <option value="mountain">Mountain</option>
-        <option value="orbit">Orbit</option>
-      </select>
-    </div>
-  </div>
-
-  <span class="pipe-arrow">▸</span>
-
-  <!-- STAGE 4: POST FX -->
-  <div class="group stage-fx">
-    <span class="section-label">④ Post FX</span>
-    <div class="group-inner">
-      <select id="postFxSelect">
-        <option value="none">None</option>
-        <option value="bloom">Bloom</option>
-        <option value="rgbsplit">RGB Split</option>
-        <option value="scanlines">Scanlines</option>
-        <option value="vhs">VHS</option>
-        <option value="pixelate">Pixelate</option>
-      </select>
-      <label>
-        Trails
-        <input type="range" id="trailSlider" min="0" max="95" step="1" value="70" />
-        <span class="badge" id="trailValue">70</span>
-      </label>
-    </div>
-  </div>
-
-  <span class="pipe-arrow">▸</span>
-
-  <!-- STAGE 5: COLOR -->
-  <div class="group stage-color">
-    <span class="section-label">⑤ Color</span>
-    <div class="group-inner">
-      <select id="modeSelect">
-        <option value="single">Single</option>
-        <option value="split" selected>Split</option>
-        <option value="heat">Heat</option>
-        <option value="pulse">Pulse</option>
-        <option value="rainbow">Rainbow</option>
-      </select>
+  <!-- ADVANCED ROW (hidden by default) -->
+  <div id="advancedRow">
+    <label style="color:var(--muted);font-size:11px">
+      Bands
       <select id="bandSplitSelect">
         <option value="1">1 Band</option>
         <option value="3" selected>3 Bands</option>
         <option value="5">5 Bands</option>
       </select>
-      <select id="paletteSelect">
-        <option value="custom">Custom</option>
-        <option value="neon" selected>Neon</option>
-        <option value="fire">Fire</option>
-        <option value="ocean">Ocean</option>
-        <option value="synthwave">Synthwave</option>
-        <option value="twitch">Twitch</option>
-        <option value="forest">Forest</option>
-        <option value="sunset">Sunset</option>
-        <option value="mono">Mono</option>
-      </select>
-      <div id="bandColorEditors"></div>
-    </div>
-  </div>
-
-  <!-- CONTROLS -->
-  <div class="group stage-ctrl" style="margin-left: auto;">
-    <span class="section-label">Controls</span>
-    <div class="group-inner">
-      <label>
-        Sensitivity
-        <input type="range" id="sensitivitySlider" min="0.5" max="4" step="0.1" value="1.8" />
-        <span class="badge" id="sensitivityValue">1.8</span>
-      </label>
-      <label>
-        <input type="checkbox" id="autoHideChk" checked />
-        Auto-hide
-      </label>
-      <span class="status-pill" id="statusBadge">Idle</span>
-    </div>
+    </label>
+    <label style="color:var(--muted);font-size:11px">
+      FFT
+      <div class="tip">
+        <select id="fftSizeSelect">
+          <option value="1024" selected>1024</option>
+          <option value="2048">2048</option>
+          <option value="4096">4096</option>
+        </select>
+        <span class="tip-icon">ⓘ</span>
+        <span class="tip-text">Higher = more freq detail, slower reaction.<br>1024 is best for most use cases.</span>
+      </div>
+    </label>
+    <span style="font-size:10px;color:var(--muted);margin-left:8px">
+      Press <kbd style="background:rgba(255,255,255,0.08);padding:1px 5px;border-radius:4px;font-family:var(--font-ui)">H</kbd> to toggle UI &nbsp;·&nbsp;
+      <kbd style="background:rgba(255,255,255,0.08);padding:1px 5px;border-radius:4px;font-family:var(--font-ui)">F</kbd> fullscreen &nbsp;·&nbsp;
+      <kbd style="background:rgba(255,255,255,0.08);padding:1px 5px;border-radius:4px;font-family:var(--font-ui)">R</kbd> random
+    </span>
   </div>
 
 </div>
 
-<div class="hint" id="hint">move mouse to show controls &nbsp;·&nbsp; press H to toggle</div>
+<div id="hint">move mouse · H toggle · F fullscreen · R random</div>
 
 <script>
 // ═══════════════════════════════════════════════════════
@@ -440,30 +618,34 @@ const BAND_PRESETS = {
 };
 
 // ─── DOM refs ───
-const canvas         = document.getElementById("canvas");
-const ctx            = canvas.getContext("2d");
-const controls       = document.getElementById("controls");
-const startBtn       = document.getElementById("startBtn");
-const stopBtn        = document.getElementById("stopBtn");
-const changeDeviceBtn= document.getElementById("changeDeviceBtn");
-const visualizerSelect= document.getElementById("visualizerSelect");
-const behaviourSelect = document.getElementById("behaviourSelect");
-const postFxSelect   = document.getElementById("postFxSelect");
-const fftSizeSelect  = document.getElementById("fftSizeSelect");
-const modeSelect     = document.getElementById("modeSelect");
-const bandSplitSelect= document.getElementById("bandSplitSelect");
-const paletteSelect  = document.getElementById("paletteSelect");
-const bandColorEditors=document.getElementById("bandColorEditors");
-const sensitivitySlider=document.getElementById("sensitivitySlider");
-const sensitivityValue =document.getElementById("sensitivityValue");
-const trailSlider    = document.getElementById("trailSlider");
-const trailValue     = document.getElementById("trailValue");
-const effectSlider   = document.getElementById("effectSlider");
-const effectValue    = document.getElementById("effectValue");
-const deviceSelect   = document.getElementById("deviceSelect");
-const autoHideChk    = document.getElementById("autoHideChk");
-const statusBadge    = document.getElementById("statusBadge");
-const hint           = document.getElementById("hint");
+const canvas            = document.getElementById("canvas");
+const ctx               = canvas.getContext("2d");
+const controls          = document.getElementById("controls");
+const startBtn          = document.getElementById("startBtn");
+const stopBtn           = document.getElementById("stopBtn");
+const visualizerSelect  = document.getElementById("visualizerSelect");
+const behaviourSelect   = document.getElementById("behaviourSelect");
+const postFxSelect      = document.getElementById("postFxSelect");
+const fftSizeSelect     = document.getElementById("fftSizeSelect");
+const modeSelect        = document.getElementById("modeSelect");
+const bandSplitSelect   = document.getElementById("bandSplitSelect");
+const paletteSelect     = document.getElementById("paletteSelect");
+const bandColorEditors  = document.getElementById("bandColorEditors");
+const sensitivitySlider = document.getElementById("sensitivitySlider");
+const sensitivityValue  = document.getElementById("sensitivityValue");
+const trailSlider       = document.getElementById("trailSlider");
+const trailValue        = document.getElementById("trailValue");
+const effectSlider      = document.getElementById("effectSlider");
+const effectValue       = document.getElementById("effectValue");
+const deviceSelect      = document.getElementById("deviceSelect");
+const autoHideChk       = document.getElementById("autoHideChk");
+const statusBadge       = document.getElementById("statusBadge");
+const hint              = document.getElementById("hint");
+const randomBtn         = document.getElementById("randomBtn");
+const fullscreenBtn     = document.getElementById("fullscreenBtn");
+const advancedBtn       = document.getElementById("advancedBtn");
+const advancedRow       = document.getElementById("advancedRow");
+const intensityWrap     = document.getElementById("intensityWrap");
 
 let currentBandColors = [];
 let hideTimer = null;
@@ -474,12 +656,11 @@ window.addEventListener("resize", resizeCanvas);
 resizeCanvas();
 
 // ─── Status ───
-function setStatus(text, active = false) {
+function setStatus(text, state = "") {
   statusBadge.textContent = text;
-  statusBadge.className = "status-pill" + (active ? " active" : "");
+  statusBadge.className = "status-pill" + (state ? " " + state : "");
 }
 
-// ─── Auto-hide UI ───
 function pokeUI() {
   controls.classList.remove("hidden");
   hint.style.opacity = "0";
@@ -497,14 +678,61 @@ window.addEventListener("mousemove", pokeUI);
 window.addEventListener("mousedown", pokeUI);
 window.addEventListener("touchstart", pokeUI, { passive: true });
 window.addEventListener("keydown", e => {
-  if (e.key === "h" || e.key === "H") {
-    controls.classList.toggle("hidden");
-  }
+  if (e.key === "h" || e.key === "H") controls.classList.toggle("hidden");
+  if (e.key === "f" || e.key === "F") toggleFullscreen();
+  if (e.key === "r" || e.key === "R") randomize();
   pokeUI();
 });
 controls.addEventListener("mouseenter", () => clearTimeout(hideTimer));
 controls.addEventListener("mouseleave", pokeUI);
 autoHideChk.addEventListener("change", () => { controls.classList.remove("hidden"); pokeUI(); });
+
+// ─── Behaviour intensity: hide when Rigid ───
+function updateIntensityVisibility() {
+  intensityWrap.classList.toggle("hidden-ctrl", behaviourSelect.value === "rigid");
+}
+
+// ─── Advanced panel toggle ───
+advancedBtn.addEventListener("click", () => {
+  advancedRow.classList.toggle("open");
+  advancedBtn.classList.toggle("open");
+  advancedBtn.textContent = advancedRow.classList.contains("open") ? "Advanced ▴" : "Advanced ▾";
+});
+
+// ─── Fullscreen ───
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(() => {});
+    fullscreenBtn.textContent = "✕";
+  } else {
+    document.exitFullscreen();
+    fullscreenBtn.textContent = "⛶";
+  }
+}
+fullscreenBtn.addEventListener("click", toggleFullscreen);
+document.addEventListener("fullscreenchange", () => {
+  fullscreenBtn.textContent = document.fullscreenElement ? "✕" : "⛶";
+});
+
+// ─── Randomize ───
+const VISUALIZER_OPTIONS = ["bars","mirror","circle","starburst","tunnel","skyline","dots","wave","mountain","orbit"];
+const BEHAVIOUR_OPTIONS  = ["rigid","wobbly","bouncy","breathing"];
+const PALETTE_OPTIONS    = ["neon","fire","ocean","synthwave","twitch","forest","sunset","mono"];
+const POSTFX_OPTIONS     = ["none","none","none","bloom","rgbsplit","scanlines","vhs"]; // weighted toward none
+
+function randomize() {
+  visualizerSelect.value = VISUALIZER_OPTIONS[Math.floor(Math.random()*VISUALIZER_OPTIONS.length)];
+  behaviourSelect.value  = BEHAVIOUR_OPTIONS[Math.floor(Math.random()*BEHAVIOUR_OPTIONS.length)];
+  paletteSelect.value    = PALETTE_OPTIONS[Math.floor(Math.random()*PALETTE_OPTIONS.length)];
+  postFxSelect.value     = POSTFX_OPTIONS[Math.floor(Math.random()*POSTFX_OPTIONS.length)];
+  effectSlider.value     = 20 + Math.floor(Math.random() * 60);
+  effectValue.textContent= effectSlider.value;
+  applyPaletteSelection();
+  updateIntensityVisibility();
+  clearCanvas(true);
+  pokeUI();
+}
+randomBtn.addEventListener("click", randomize);
 
 // ─── Colour helpers ───
 function hexToRgb(hex) {
@@ -1110,19 +1338,25 @@ async function startVisualizer(deviceId="") {
     analyser.connect(silentGain);
     silentGain.connect(audioCtx.destination);
 
-    startBtn.disabled=true; stopBtn.disabled=false; changeDeviceBtn.disabled=false;
-    await loadDevices(); deviceSelect.value=currentDeviceId;
-    setStatus("Live ✦", true);
+    startBtn.disabled = true;
+    startBtn.classList.add("running");
+    stopBtn.disabled  = false;
+    await loadDevices(); deviceSelect.value = currentDeviceId;
+    deviceSelect.classList.remove("needs-apply");
+    setStatus("Live ✦", "active");
     pokeUI(); draw();
   } catch(err) {
-    console.error(err); setStatus("Error");
+    console.error(err);
+    setStatus("Error", "error");
     alert("Microphone error: "+err.message);
   }
 }
 
 function stopVisualizer() {
   cleanupAudio();
-  startBtn.disabled=false; stopBtn.disabled=true; changeDeviceBtn.disabled=true;
+  startBtn.disabled = false;
+  startBtn.classList.remove("running");
+  stopBtn.disabled  = true;
   setStatus("Stopped");
   clearCanvas(true); pokeUI();
 }
@@ -1130,7 +1364,15 @@ function stopVisualizer() {
 // ─── Event listeners ───
 startBtn.addEventListener("click", () => startVisualizer(deviceSelect.value));
 stopBtn.addEventListener("click", stopVisualizer);
-changeDeviceBtn.addEventListener("click", () => startVisualizer(deviceSelect.value));
+
+// Device auto-applies — highlight if changed while running
+deviceSelect.addEventListener("change", () => {
+  if (!stopBtn.disabled) {
+    // Already running — restart with new device immediately
+    startVisualizer(deviceSelect.value);
+  }
+  pokeUI();
+});
 
 fftSizeSelect.addEventListener("change", () => {
   if (analyser) { analyser.fftSize=parseInt(fftSizeSelect.value,10); rebuildDataArrays(); } pokeUI();
@@ -1143,7 +1385,7 @@ bandSplitSelect.addEventListener("change", () => {
 paletteSelect.addEventListener("change", () => { applyPaletteSelection(); pokeUI(); });
 modeSelect.addEventListener("change",      () => { clearCanvas(true); pokeUI(); });
 visualizerSelect.addEventListener("change",() => { clearCanvas(true); pokeUI(); });
-behaviourSelect.addEventListener("change", () => { clearCanvas(true); pokeUI(); });
+behaviourSelect.addEventListener("change", () => { updateIntensityVisibility(); clearCanvas(true); pokeUI(); });
 postFxSelect.addEventListener("change",    () => { clearCanvas(true); pokeUI(); });
 
 sensitivitySlider.addEventListener("input", () => {
@@ -1151,7 +1393,6 @@ sensitivitySlider.addEventListener("input", () => {
 });
 trailSlider.addEventListener("input", () => { trailValue.textContent=trailSlider.value; pokeUI(); });
 effectSlider.addEventListener("input",() => { effectValue.textContent=effectSlider.value; pokeUI(); });
-deviceSelect.addEventListener("change", pokeUI);
 
 if (navigator.mediaDevices?.addEventListener) {
   navigator.mediaDevices.addEventListener("devicechange", loadDevices);
@@ -1163,6 +1404,7 @@ trailValue.textContent       = trailSlider.value;
 effectValue.textContent      = effectSlider.value;
 currentBandColors = getPaletteColors("neon", getBandCount());
 renderBandColorEditors();
+updateIntensityVisibility();
 loadDevices();
 clearCanvas(true);
 pokeUI();
