@@ -9,36 +9,68 @@
       box-sizing: border-box;
     }
 
+    :root {
+      --panel-bg: rgba(0, 0, 0, 0.72);
+      --panel-border: rgba(255, 255, 255, 0.08);
+      --text: #ffffff;
+      --muted: #c8c8c8;
+      --bg: #020202;
+    }
+
     body {
       margin: 0;
-      background: #050505;
-      color: white;
+      background: var(--bg);
+      color: var(--text);
       font-family: Arial, sans-serif;
       overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      background: #000;
     }
 
     .controls {
       position: fixed;
       top: 12px;
       left: 12px;
-      z-index: 10;
+      right: 12px;
+      z-index: 20;
       display: flex;
       gap: 10px;
       align-items: center;
       flex-wrap: wrap;
-      background: rgba(0, 0, 0, 0.72);
       padding: 10px 12px;
-      border-radius: 12px;
-      backdrop-filter: blur(6px);
+      border-radius: 14px;
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      backdrop-filter: blur(8px);
+      transition: opacity 0.25s ease, transform 0.25s ease;
     }
 
-    button, select, input[type="color"] {
-      padding: 8px 10px;
-      border: none;
-      border-radius: 6px;
-      font-size: 14px;
-      background: #2b2b2b;
+    .controls.hidden {
+      opacity: 0;
+      transform: translateY(-140%);
+      pointer-events: none;
+    }
+
+    button,
+    select,
+    input[type="color"],
+    input[type="range"] {
+      background: #222;
       color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+
+    button,
+    select,
+    input[type="color"] {
+      padding: 8px 10px;
     }
 
     button {
@@ -46,90 +78,165 @@
     }
 
     button:hover {
-      background: #3b3b3b;
+      background: #303030;
     }
 
     label {
-      display: flex;
+      display: inline-flex;
       align-items: center;
       gap: 6px;
       font-size: 14px;
+      color: var(--text);
+      white-space: nowrap;
     }
 
-    canvas {
-      display: block;
-      width: 100vw;
-      height: 100vh;
-      background: black;
+    input[type="range"] {
+      width: 120px;
+      padding: 0;
+      accent-color: #00ff88;
     }
 
-    #status {
+    input[type="checkbox"] {
+      accent-color: #00ff88;
+    }
+
+    #deviceSelect {
+      max-width: 220px;
+    }
+
+    #visualizerSelect {
+      min-width: 150px;
+    }
+
+    .value-badge,
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 42px;
+      padding: 6px 8px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .status-badge {
+      margin-left: auto;
+      min-width: 110px;
+      color: #e8e8e8;
+      background: rgba(255, 255, 255, 0.10);
+    }
+
+    .group {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 6px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .hint {
       position: fixed;
       bottom: 12px;
       left: 12px;
       z-index: 10;
-      background: rgba(0,0,0,0.72);
       padding: 8px 10px;
-      border-radius: 8px;
-      font-size: 14px;
-      color: #ccc;
-      backdrop-filter: blur(6px);
-    }
-
-    #deviceSelect {
-      max-width: 260px;
-    }
-
-    #visualizerSelect {
-      min-width: 140px;
+      border-radius: 10px;
+      background: rgba(0, 0, 0, 0.55);
+      color: #bdbdbd;
+      font-size: 12px;
+      backdrop-filter: blur(8px);
     }
   </style>
 </head>
 <body>
-  <div class="controls">
-    <button id="startBtn">Start</button>
-    <button id="stopBtn" disabled>Stop</button>
+  <div class="controls" id="controls">
+    <div class="group">
+      <button id="startBtn">Start</button>
+      <button id="stopBtn" disabled>Stop</button>
+    </div>
 
-    <label>
-      FFT size
-      <select id="fftSizeSelect">
-        <option value="1024" selected>1024</option>
-        <option value="2048">2048</option>
-        <option value="4096">4096</option>
-      </select>
-    </label>
+    <div class="group">
+      <label>
+        FFT
+        <select id="fftSizeSelect">
+          <option value="1024" selected>1024</option>
+          <option value="2048">2048</option>
+          <option value="4096">4096</option>
+        </select>
+      </label>
+    </div>
 
-    <label>
-      Color
-      <input type="color" id="colorPicker" value="#00ff66" />
-    </label>
+    <div class="group">
+      <label>
+        Color
+        <input type="color" id="colorPicker" value="#00ff88" />
+      </label>
+    </div>
 
-    <label>
-      Visualizer
-      <select id="visualizerSelect">
-        <option value="bars">Bars</option>
-        <option value="mirror">Mirror</option>
-        <option value="circle">Circle</option>
-        <option value="wave">Wave</option>
-        <option value="dots">Dots</option>
-        <option value="starburst">Starburst</option>
-        <option value="tunnel">Tunnel</option>
-        <option value="mountain">Mountain</option>
-      </select>
-    </label>
+    <div class="group">
+      <label>
+        Style
+        <select id="visualizerSelect">
+          <option value="bars">Bars</option>
+          <option value="mirror">Mirror</option>
+          <option value="circle">Circle</option>
+          <option value="wave">Wave</option>
+          <option value="dots">Dots</option>
+          <option value="starburst">Starburst</option>
+          <option value="tunnel">Tunnel</option>
+          <option value="mountain">Mountain</option>
+          <option value="orbit">Orbit</option>
+          <option value="spiral">Spiral</option>
+          <option value="pulse">Pulse Rings</option>
+          <option value="skyline">Skyline</option>
+          <option value="helix">Helix</option>
+          <option value="petals">Petals</option>
+          <option value="web">Web</option>
+        </select>
+      </label>
+    </div>
 
-    <label>
-      Device
-      <select id="deviceSelect">
-        <option value="">Default microphone</option>
-      </select>
-    </label>
+    <div class="group">
+      <label>
+        Sensitivity
+        <input type="range" id="sensitivitySlider" min="0.5" max="4" step="0.1" value="1.8" />
+      </label>
+      <span class="value-badge" id="sensitivityValue">1.8</span>
+    </div>
 
-    <button id="changeDeviceBtn" disabled>Change device</button>
+    <div class="group">
+      <label>
+        Trails
+        <input type="range" id="trailSlider" min="0" max="95" step="1" value="70" />
+      </label>
+      <span class="value-badge" id="trailValue">70</span>
+    </div>
+
+    <div class="group">
+      <label>
+        Device
+        <select id="deviceSelect">
+          <option value="">Default microphone</option>
+        </select>
+      </label>
+      <button id="changeDeviceBtn" disabled>Change device</button>
+    </div>
+
+    <div class="group">
+      <label>
+        <input type="checkbox" id="autoHideChk" checked />
+        Auto-hide UI
+      </label>
+    </div>
+
+    <span class="status-badge" id="statusBadge">Idle</span>
   </div>
 
   <canvas id="canvas"></canvas>
-  <div id="status">Idle</div>
+  <div class="hint">Move mouse to show controls</div>
 
   <script>
     let audioCtx = null;
@@ -141,18 +248,25 @@
     let freqData = null;
     let timeData = null;
     let currentDeviceId = "";
+    let hideTimer = null;
 
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
 
+    const controls = document.getElementById("controls");
     const startBtn = document.getElementById("startBtn");
     const stopBtn = document.getElementById("stopBtn");
     const fftSizeSelect = document.getElementById("fftSizeSelect");
     const colorPicker = document.getElementById("colorPicker");
     const visualizerSelect = document.getElementById("visualizerSelect");
+    const sensitivitySlider = document.getElementById("sensitivitySlider");
+    const sensitivityValue = document.getElementById("sensitivityValue");
+    const trailSlider = document.getElementById("trailSlider");
+    const trailValue = document.getElementById("trailValue");
     const deviceSelect = document.getElementById("deviceSelect");
     const changeDeviceBtn = document.getElementById("changeDeviceBtn");
-    const statusEl = document.getElementById("status");
+    const autoHideChk = document.getElementById("autoHideChk");
+    const statusBadge = document.getElementById("statusBadge");
 
     function resizeCanvas() {
       canvas.width = window.innerWidth;
@@ -163,8 +277,15 @@
     resizeCanvas();
 
     function setStatus(text) {
-      statusEl.textContent = text;
+      statusBadge.textContent = text;
     }
+
+    function updateSliderLabels() {
+      sensitivityValue.textContent = Number(sensitivitySlider.value).toFixed(1);
+      trailValue.textContent = trailSlider.value;
+    }
+
+    updateSliderLabels();
 
     function hexToRgb(hex) {
       return {
@@ -177,6 +298,29 @@
     function hexToRgba(hex, alpha) {
       const { r, g, b } = hexToRgb(hex);
       return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+
+    function getSensitivity() {
+      return parseFloat(sensitivitySlider.value);
+    }
+
+    function applySensitivity(value01) {
+      const boosted = value01 * getSensitivity();
+      return Math.min(1, Math.pow(boosted, 0.92));
+    }
+
+    function getTrailAmount() {
+      return parseInt(trailSlider.value, 10);
+    }
+
+    function clearCanvas(forceSolid = false) {
+      if (forceSolid || getTrailAmount() <= 0) {
+        ctx.fillStyle = "#000";
+      } else {
+        const alpha = Math.max(0.03, 1 - (getTrailAmount() / 100));
+        ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
+      }
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
 
     function rebuildDataArrays() {
@@ -200,10 +344,39 @@
       return count ? sum / count : 0;
     }
 
+    function getLevels(count, startFrac = 0, endFrac = 1) {
+      const start = Math.floor(freqData.length * startFrac);
+      const end = Math.max(start + 1, Math.floor(freqData.length * endFrac));
+      const length = end - start;
+      const step = Math.max(1, Math.floor(length / count));
+      const out = [];
+
+      for (let i = 0; i < count; i++) {
+        const avg = averageBand(start + i * step, step);
+        out.push(applySensitivity(avg / 255));
+      }
+
+      return out;
+    }
+
+    function getEnergy(startFrac, endFrac) {
+      const start = Math.floor(freqData.length * startFrac);
+      const end = Math.max(start + 1, Math.floor(freqData.length * endFrac));
+      let sum = 0;
+      let count = 0;
+
+      for (let i = start; i < end; i++) {
+        sum += freqData[i];
+        count++;
+      }
+
+      return count ? applySensitivity((sum / count) / 255) : 0;
+    }
+
     async function loadDevices() {
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
-        const audioInputs = devices.filter(device => device.kind === "audioinput");
+        const audioInputs = devices.filter(d => d.kind === "audioinput");
 
         deviceSelect.innerHTML = "";
 
@@ -250,12 +423,15 @@
         mediaStream.getTracks().forEach(track => track.stop());
         mediaStream = null;
       }
+
+      freqData = null;
+      timeData = null;
     }
 
     async function startVisualizer(deviceId = "") {
       try {
         cleanupAudio();
-        setStatus("Requesting microphone...");
+        setStatus("Starting...");
 
         if (!audioCtx) {
           audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -305,57 +481,66 @@
         deviceSelect.value = currentDeviceId;
 
         setStatus("Mic running ✅");
+        pokeUI();
         draw();
       } catch (err) {
         console.error(err);
-        setStatus("Mic error: " + err.message);
+        setStatus("Mic error");
         alert("Microphone error: " + err.message);
       }
     }
 
     function stopVisualizer() {
       cleanupAudio();
-
       startBtn.disabled = false;
       stopBtn.disabled = true;
       changeDeviceBtn.disabled = true;
-
       setStatus("Stopped");
-
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = "black";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      clearCanvas(true);
+      pokeUI();
     }
 
-    function clearSolid() {
-      ctx.fillStyle = "black";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    function pokeUI() {
+      controls.classList.remove("hidden");
+      clearTimeout(hideTimer);
+
+      if (!autoHideChk.checked) return;
+
+      hideTimer = setTimeout(() => {
+        if (!controls.matches(":hover")) {
+          controls.classList.add("hidden");
+        }
+      }, 2200);
     }
 
-    function clearTrail(alpha = 0.14) {
-      ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
+    window.addEventListener("mousemove", pokeUI);
+    window.addEventListener("mousedown", pokeUI);
+    window.addEventListener("touchstart", pokeUI, { passive: true });
+    window.addEventListener("keydown", pokeUI);
+    controls.addEventListener("mouseenter", () => clearTimeout(hideTimer));
+    controls.addEventListener("mouseleave", pokeUI);
+
+    autoHideChk.addEventListener("change", () => {
+      controls.classList.remove("hidden");
+      pokeUI();
+    });
 
     function drawBars(color) {
       analyser.getByteFrequencyData(freqData);
-      clearSolid();
+      clearCanvas(false);
 
-      const visibleBars = 128;
-      const step = Math.max(1, Math.floor(freqData.length / visibleBars));
-      const barWidth = canvas.width / visibleBars;
+      const levels = getLevels(110, 0, 0.85);
+      const barWidth = canvas.width / levels.length;
 
       ctx.shadowBlur = 18;
       ctx.shadowColor = color;
 
-      for (let i = 0; i < visibleBars; i++) {
-        const average = averageBand(i * step, step);
-        const barHeight = (average / 255) * canvas.height;
+      for (let i = 0; i < levels.length; i++) {
+        const h = levels[i] * canvas.height;
         const x = i * barWidth;
-        const y = canvas.height - barHeight;
-
+        const y = canvas.height - h;
         ctx.fillStyle = color;
-        ctx.fillRect(x, y, Math.max(2, barWidth - 2), barHeight);
+        ctx.fillRect(x, y, Math.max(2, barWidth - 2), h);
       }
 
       ctx.shadowBlur = 0;
@@ -363,20 +548,18 @@
 
     function drawMirror(color) {
       analyser.getByteFrequencyData(freqData);
-      clearTrail(0.18);
+      clearCanvas(false);
 
-      const visibleBars = 96;
-      const step = Math.max(1, Math.floor(freqData.length / visibleBars));
-      const barWidth = canvas.width / visibleBars;
+      const levels = getLevels(100, 0, 0.85);
+      const barWidth = canvas.width / levels.length;
       const centerY = canvas.height / 2;
 
       ctx.shadowBlur = 20;
       ctx.shadowColor = color;
       ctx.fillStyle = color;
 
-      for (let i = 0; i < visibleBars; i++) {
-        const average = averageBand(i * step, step);
-        const size = (average / 255) * (canvas.height * 0.42);
+      for (let i = 0; i < levels.length; i++) {
+        const size = levels[i] * canvas.height * 0.42;
         const x = i * barWidth;
         const w = Math.max(2, barWidth - 2);
 
@@ -387,15 +570,14 @@
       ctx.shadowBlur = 0;
     }
 
-    function drawCircle(color) {
+    function drawCircle(color, t) {
       analyser.getByteFrequencyData(freqData);
-      clearTrail(0.12);
+      clearCanvas(false);
 
+      const levels = getLevels(180, 0, 0.9);
       const cx = canvas.width / 2;
       const cy = canvas.height / 2;
-      const radius = Math.min(canvas.width, canvas.height) * 0.18;
-      const points = 180;
-      const step = Math.max(1, Math.floor(freqData.length / points));
+      const baseRadius = Math.min(canvas.width, canvas.height) * 0.17;
 
       ctx.save();
       ctx.translate(cx, cy);
@@ -404,15 +586,13 @@
       ctx.shadowBlur = 16;
       ctx.shadowColor = color;
 
-      for (let i = 0; i < points; i++) {
-        const average = averageBand(i * step, step);
-        const extra = (average / 255) * (Math.min(canvas.width, canvas.height) * 0.22);
-        const angle = (i / points) * Math.PI * 2;
-
-        const x1 = Math.cos(angle) * radius;
-        const y1 = Math.sin(angle) * radius;
-        const x2 = Math.cos(angle) * (radius + extra);
-        const y2 = Math.sin(angle) * (radius + extra);
+      for (let i = 0; i < levels.length; i++) {
+        const angle = (i / levels.length) * Math.PI * 2 + t * 0.08;
+        const extra = levels[i] * Math.min(canvas.width, canvas.height) * 0.22;
+        const x1 = Math.cos(angle) * baseRadius;
+        const y1 = Math.sin(angle) * baseRadius;
+        const x2 = Math.cos(angle) * (baseRadius + extra);
+        const y2 = Math.sin(angle) * (baseRadius + extra);
 
         ctx.beginPath();
         ctx.moveTo(x1, y1);
@@ -421,9 +601,9 @@
       }
 
       ctx.beginPath();
-      ctx.strokeStyle = hexToRgba(color, 0.35);
       ctx.lineWidth = 3;
-      ctx.arc(0, 0, radius, 0, Math.PI * 2);
+      ctx.strokeStyle = hexToRgba(color, 0.28);
+      ctx.arc(0, 0, baseRadius, 0, Math.PI * 2);
       ctx.stroke();
 
       ctx.restore();
@@ -432,7 +612,10 @@
 
     function drawWave(color) {
       analyser.getByteTimeDomainData(timeData);
-      clearTrail(0.15);
+      clearCanvas(false);
+
+      const centerY = canvas.height / 2;
+      const amp = canvas.height * 0.28 * getSensitivity();
 
       ctx.beginPath();
       ctx.lineWidth = 3;
@@ -440,17 +623,13 @@
       ctx.shadowBlur = 18;
       ctx.shadowColor = color;
 
-      const sliceWidth = canvas.width / timeData.length;
-      let x = 0;
-
       for (let i = 0; i < timeData.length; i++) {
-        const v = timeData[i] / 128.0;
-        const y = (v * canvas.height) / 2;
+        const x = (i / (timeData.length - 1)) * canvas.width;
+        const v = (timeData[i] - 128) / 128;
+        const y = centerY + v * amp;
 
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
-
-        x += sliceWidth;
       }
 
       ctx.stroke();
@@ -459,21 +638,18 @@
 
     function drawDots(color) {
       analyser.getByteFrequencyData(freqData);
-      clearTrail(0.10);
+      clearCanvas(false);
 
-      const count = 96;
-      const step = Math.max(1, Math.floor(freqData.length / count));
-      const barWidth = canvas.width / count;
+      const levels = getLevels(96, 0, 0.9);
+      const spacing = canvas.width / levels.length;
 
       ctx.shadowBlur = 22;
       ctx.shadowColor = color;
 
-      for (let i = 0; i < count; i++) {
-        const average = averageBand(i * step, step);
-        const norm = average / 255;
-        const x = i * barWidth + barWidth / 2;
-        const y = canvas.height - norm * canvas.height;
-        const r = 2 + norm * 12;
+      for (let i = 0; i < levels.length; i++) {
+        const x = i * spacing + spacing / 2;
+        const y = canvas.height - levels[i] * canvas.height;
+        const r = 2 + levels[i] * 14;
 
         ctx.beginPath();
         ctx.fillStyle = hexToRgba(color, 0.95);
@@ -481,23 +657,22 @@
         ctx.fill();
 
         ctx.beginPath();
-        ctx.fillStyle = hexToRgba(color, 0.25);
-        ctx.arc(x, y, r * 2.2, 0, Math.PI * 2);
+        ctx.fillStyle = hexToRgba(color, 0.20);
+        ctx.arc(x, y, r * 2.4, 0, Math.PI * 2);
         ctx.fill();
       }
 
       ctx.shadowBlur = 0;
     }
 
-    function drawStarburst(color) {
+    function drawStarburst(color, t) {
       analyser.getByteFrequencyData(freqData);
-      clearTrail(0.12);
+      clearCanvas(false);
 
+      const levels = getLevels(220, 0, 0.95);
       const cx = canvas.width / 2;
       const cy = canvas.height / 2;
-      const baseRadius = Math.min(canvas.width, canvas.height) * 0.08;
-      const rays = 220;
-      const step = Math.max(1, Math.floor(freqData.length / rays));
+      const inner = Math.min(canvas.width, canvas.height) * 0.06;
 
       ctx.save();
       ctx.translate(cx, cy);
@@ -505,16 +680,13 @@
       ctx.shadowBlur = 20;
       ctx.shadowColor = color;
 
-      for (let i = 0; i < rays; i++) {
-        const average = averageBand(i * step, step);
-        const norm = average / 255;
-        const angle = (i / rays) * Math.PI * 2;
-        const inner = baseRadius;
-        const outer = inner + norm * Math.min(canvas.width, canvas.height) * 0.35;
+      for (let i = 0; i < levels.length; i++) {
+        const angle = (i / levels.length) * Math.PI * 2 + t * 0.25;
+        const outer = inner + levels[i] * Math.min(canvas.width, canvas.height) * 0.38;
 
         ctx.beginPath();
-        ctx.strokeStyle = hexToRgba(color, 0.25 + norm * 0.75);
-        ctx.lineWidth = 1 + norm * 4;
+        ctx.strokeStyle = hexToRgba(color, 0.2 + levels[i] * 0.8);
+        ctx.lineWidth = 1 + levels[i] * 4;
         ctx.moveTo(Math.cos(angle) * inner, Math.sin(angle) * inner);
         ctx.lineTo(Math.cos(angle) * outer, Math.sin(angle) * outer);
         ctx.stroke();
@@ -526,11 +698,11 @@
 
     function drawTunnel(color) {
       analyser.getByteFrequencyData(freqData);
-      clearTrail(0.08);
+      clearCanvas(false);
 
       const cx = canvas.width / 2;
       const cy = canvas.height / 2;
-      const rings = 12;
+      const rings = 14;
       const maxRadius = Math.min(canvas.width, canvas.height) * 0.42;
 
       ctx.save();
@@ -539,14 +711,12 @@
       ctx.shadowColor = color;
 
       for (let i = 0; i < rings; i++) {
-        const bandIndex = Math.floor((i / rings) * freqData.length * 0.7);
-        const average = averageBand(bandIndex, 8);
-        const norm = average / 255;
-        const radius = ((i + 1) / rings) * maxRadius + norm * 20;
+        const energy = getEnergy(i / rings * 0.7, (i + 1) / rings * 0.7);
+        const radius = ((i + 1) / rings) * maxRadius + energy * 18;
 
         ctx.beginPath();
-        ctx.strokeStyle = hexToRgba(color, 0.10 + (i / rings) * 0.45 + norm * 0.25);
-        ctx.lineWidth = 1 + norm * 4;
+        ctx.strokeStyle = hexToRgba(color, 0.1 + (i / rings) * 0.35 + energy * 0.35);
+        ctx.lineWidth = 1 + energy * 4;
         ctx.arc(0, 0, radius, 0, Math.PI * 2);
         ctx.stroke();
       }
@@ -557,29 +727,26 @@
 
     function drawMountain(color) {
       analyser.getByteFrequencyData(freqData);
-      clearTrail(0.16);
+      clearCanvas(false);
 
-      const points = 160;
-      const step = Math.max(1, Math.floor(freqData.length / points));
+      const levels = getLevels(160, 0, 0.85);
       const baseline = canvas.height * 0.88;
 
       ctx.beginPath();
       ctx.moveTo(0, canvas.height);
 
-      for (let i = 0; i < points; i++) {
-        const average = averageBand(i * step, step);
-        const norm = average / 255;
-        const x = (i / (points - 1)) * canvas.width;
-        const y = baseline - norm * canvas.height * 0.65;
+      for (let i = 0; i < levels.length; i++) {
+        const x = (i / (levels.length - 1)) * canvas.width;
+        const y = baseline - levels[i] * canvas.height * 0.68;
         ctx.lineTo(x, y);
       }
 
       ctx.lineTo(canvas.width, canvas.height);
       ctx.closePath();
 
-      const gradient = ctx.createLinearGradient(0, baseline - canvas.height * 0.6, 0, canvas.height);
-      gradient.addColorStop(0, hexToRgba(color, 0.85));
-      gradient.addColorStop(1, hexToRgba(color, 0.05));
+      const gradient = ctx.createLinearGradient(0, baseline - canvas.height * 0.65, 0, canvas.height);
+      gradient.addColorStop(0, hexToRgba(color, 0.88));
+      gradient.addColorStop(1, hexToRgba(color, 0.04));
 
       ctx.fillStyle = gradient;
       ctx.shadowBlur = 18;
@@ -587,37 +754,317 @@
       ctx.fill();
 
       ctx.beginPath();
-      for (let i = 0; i < points; i++) {
-        const average = averageBand(i * step, step);
-        const norm = average / 255;
-        const x = (i / (points - 1)) * canvas.width;
-        const y = baseline - norm * canvas.height * 0.65;
+      for (let i = 0; i < levels.length; i++) {
+        const x = (i / (levels.length - 1)) * canvas.width;
+        const y = baseline - levels[i] * canvas.height * 0.68;
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
-
-      ctx.strokeStyle = color;
       ctx.lineWidth = 2.5;
+      ctx.strokeStyle = color;
       ctx.stroke();
       ctx.shadowBlur = 0;
     }
 
-    function draw() {
+    function drawOrbit(color, t) {
+      analyser.getByteFrequencyData(freqData);
+      clearCanvas(false);
+
+      const levels = getLevels(72, 0, 0.85);
+      const cx = canvas.width / 2;
+      const cy = canvas.height / 2;
+      const baseRadius = Math.min(canvas.width, canvas.height) * 0.18;
+      const extraRadius = Math.min(canvas.width, canvas.height) * 0.25;
+
+      ctx.shadowBlur = 20;
+      ctx.shadowColor = color;
+
+      for (let i = 0; i < levels.length; i++) {
+        const angle = (i / levels.length) * Math.PI * 2 + t * (0.25 + levels[i] * 0.7);
+        const radius = baseRadius + levels[i] * extraRadius;
+        const x = cx + Math.cos(angle) * radius;
+        const y = cy + Math.sin(angle) * radius;
+        const r = 2 + levels[i] * 8;
+
+        ctx.beginPath();
+        ctx.fillStyle = hexToRgba(color, 0.95);
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.fillStyle = hexToRgba(color, 0.18);
+        ctx.arc(x, y, r * 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.shadowBlur = 0;
+    }
+
+    function drawSpiral(color, t) {
+      analyser.getByteFrequencyData(freqData);
+      clearCanvas(false);
+
+      const levels = getLevels(220, 0, 0.92);
+      const cx = canvas.width / 2;
+      const cy = canvas.height / 2;
+
+      ctx.beginPath();
+      ctx.lineWidth = 2.2;
+      ctx.strokeStyle = color;
+      ctx.shadowBlur = 18;
+      ctx.shadowColor = color;
+
+      for (let i = 0; i < levels.length; i++) {
+        const angle = t * 0.8 + i * 0.28;
+        const radius = 8 + i * 1.85 + levels[i] * 50;
+        const x = cx + Math.cos(angle) * radius;
+        const y = cy + Math.sin(angle) * radius;
+
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+
+    function drawPulse(color, t) {
+      analyser.getByteFrequencyData(freqData);
+      clearCanvas(false);
+
+      const bass = getEnergy(0.00, 0.08);
+      const mid = getEnergy(0.08, 0.28);
+      const high = getEnergy(0.28, 0.75);
+
+      const cx = canvas.width / 2;
+      const cy = canvas.height / 2;
+      const base = Math.min(canvas.width, canvas.height) * 0.10;
+
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.shadowBlur = 22;
+      ctx.shadowColor = color;
+
+      const rings = [
+        { r: base + bass * 140, a: 0.85, w: 4 },
+        { r: base + 55 + mid * 130, a: 0.55, w: 3 },
+        { r: base + 110 + high * 120, a: 0.32, w: 2 }
+      ];
+
+      for (const ring of rings) {
+        ctx.beginPath();
+        ctx.strokeStyle = hexToRgba(color, ring.a);
+        ctx.lineWidth = ring.w;
+        ctx.arc(0, 0, ring.r, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      const core = 12 + bass * 24 + Math.sin(t * 6) * 2;
+      ctx.beginPath();
+      ctx.fillStyle = hexToRgba(color, 0.30);
+      ctx.arc(0, 0, core * 2.6, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.fillStyle = hexToRgba(color, 0.85);
+      ctx.arc(0, 0, core, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+      ctx.shadowBlur = 0;
+    }
+
+    function drawSkyline(color) {
+      analyser.getByteFrequencyData(freqData);
+      clearCanvas(false);
+
+      const levels = getLevels(120, 0, 0.88);
+      const barWidth = canvas.width / levels.length;
+      const bottom = canvas.height;
+
+      ctx.shadowBlur = 18;
+      ctx.shadowColor = color;
+
+      for (let i = 0; i < levels.length; i++) {
+        const h = 20 + levels[i] * canvas.height * 0.72;
+        const x = i * barWidth;
+        const y = bottom - h;
+
+        const grad = ctx.createLinearGradient(0, y, 0, bottom);
+        grad.addColorStop(0, hexToRgba(color, 0.95));
+        grad.addColorStop(1, hexToRgba(color, 0.08));
+
+        ctx.fillStyle = grad;
+        ctx.fillRect(x, y, Math.max(2, barWidth - 1), h);
+
+        ctx.fillStyle = hexToRgba(color, 0.95);
+        ctx.fillRect(x, y, Math.max(2, barWidth - 1), 2);
+      }
+
+      ctx.shadowBlur = 0;
+    }
+
+    function drawHelix(color, t) {
+      analyser.getByteTimeDomainData(timeData);
+      clearCanvas(false);
+
+      const centerY = canvas.height / 2;
+      const amp = canvas.height * 0.16 * getSensitivity();
+      const twist = canvas.height * 0.10;
+
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = color;
+      ctx.shadowBlur = 18;
+      ctx.shadowColor = color;
+
+      ctx.beginPath();
+      for (let i = 0; i < timeData.length; i++) {
+        const x = (i / (timeData.length - 1)) * canvas.width;
+        const audio = ((timeData[i] - 128) / 128) * amp;
+        const wave = Math.sin(i * 0.03 + t * 4) * twist;
+        const y = centerY + wave + audio;
+
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+
+      ctx.beginPath();
+      for (let i = 0; i < timeData.length; i++) {
+        const x = (i / (timeData.length - 1)) * canvas.width;
+        const audio = ((timeData[i] - 128) / 128) * amp;
+        const wave = -Math.sin(i * 0.03 + t * 4) * twist;
+        const y = centerY + wave - audio;
+
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+
+      ctx.shadowBlur = 0;
+    }
+
+    function drawPetals(color, t) {
+      analyser.getByteFrequencyData(freqData);
+      clearCanvas(false);
+
+      const levels = getLevels(180, 0, 0.9);
+      const cx = canvas.width / 2;
+      const cy = canvas.height / 2;
+      const baseRadius = Math.min(canvas.width, canvas.height) * 0.12;
+      const maxExtra = Math.min(canvas.width, canvas.height) * 0.25;
+
+      ctx.save();
+      ctx.translate(cx, cy);
+
+      ctx.beginPath();
+      for (let i = 0; i < levels.length; i++) {
+        const angle = (i / levels.length) * Math.PI * 2 + t * 0.15;
+        const wobble = Math.sin(angle * 6 + t * 2) * 10;
+        const radius = baseRadius + levels[i] * maxExtra + wobble * levels[i];
+        const x = Math.cos(angle) * radius;
+        const y = Math.sin(angle) * radius;
+
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+
+      ctx.fillStyle = hexToRgba(color, 0.12);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2.5;
+      ctx.shadowBlur = 20;
+      ctx.shadowColor = color;
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.restore();
+      ctx.shadowBlur = 0;
+    }
+
+    function drawWeb(color, t) {
+      analyser.getByteFrequencyData(freqData);
+      clearCanvas(false);
+
+      const levels = getLevels(72, 0, 0.88);
+      const cx = canvas.width / 2;
+      const cy = canvas.height / 2;
+      const baseRadius = Math.min(canvas.width, canvas.height) * 0.14;
+      const maxExtra = Math.min(canvas.width, canvas.height) * 0.20;
+
+      const points = [];
+
+      for (let i = 0; i < levels.length; i++) {
+        const angle = (i / levels.length) * Math.PI * 2 + t * 0.1;
+        const radius = baseRadius + levels[i] * maxExtra;
+        points.push({
+          x: cx + Math.cos(angle) * radius,
+          y: cy + Math.sin(angle) * radius
+        });
+      }
+
+      ctx.shadowBlur = 18;
+      ctx.shadowColor = color;
+
+      ctx.beginPath();
+      points.forEach((p, i) => {
+        if (i === 0) ctx.moveTo(p.x, p.y);
+        else ctx.lineTo(p.x, p.y);
+      });
+      ctx.closePath();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.strokeStyle = hexToRgba(color, 0.22);
+      ctx.lineWidth = 1;
+
+      for (let i = 0; i < points.length; i += 3) {
+        const a = points[i];
+        const b = points[(i + 12) % points.length];
+        const c = points[(i + 24) % points.length];
+
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.lineTo(c.x, c.y);
+        ctx.stroke();
+      }
+
+      for (const p of points) {
+        ctx.beginPath();
+        ctx.fillStyle = hexToRgba(color, 0.8);
+        ctx.arc(p.x, p.y, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.shadowBlur = 0;
+    }
+
+    function draw(now = 0) {
       rafId = requestAnimationFrame(draw);
 
       if (!analyser || !freqData || !timeData) return;
 
       const color = colorPicker.value;
       const mode = visualizerSelect.value;
+      const t = now * 0.001;
 
       if (mode === "bars") drawBars(color);
       else if (mode === "mirror") drawMirror(color);
-      else if (mode === "circle") drawCircle(color);
+      else if (mode === "circle") drawCircle(color, t);
       else if (mode === "wave") drawWave(color);
       else if (mode === "dots") drawDots(color);
-      else if (mode === "starburst") drawStarburst(color);
+      else if (mode === "starburst") drawStarburst(color, t);
       else if (mode === "tunnel") drawTunnel(color);
       else if (mode === "mountain") drawMountain(color);
+      else if (mode === "orbit") drawOrbit(color, t);
+      else if (mode === "spiral") drawSpiral(color, t);
+      else if (mode === "pulse") drawPulse(color, t);
+      else if (mode === "skyline") drawSkyline(color);
+      else if (mode === "helix") drawHelix(color, t);
+      else if (mode === "petals") drawPetals(color, t);
+      else if (mode === "web") drawWeb(color, t);
     }
 
     startBtn.addEventListener("click", async () => {
@@ -638,12 +1085,30 @@
     });
 
     visualizerSelect.addEventListener("change", () => {
-      clearSolid();
+      clearCanvas(true);
+      pokeUI();
     });
 
-    navigator.mediaDevices.addEventListener?.("devicechange", loadDevices);
+    sensitivitySlider.addEventListener("input", () => {
+      updateSliderLabels();
+      pokeUI();
+    });
+
+    trailSlider.addEventListener("input", () => {
+      updateSliderLabels();
+      pokeUI();
+    });
+
+    colorPicker.addEventListener("input", pokeUI);
+    deviceSelect.addEventListener("change", pokeUI);
+
+    if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+      navigator.mediaDevices.addEventListener("devicechange", loadDevices);
+    }
 
     loadDevices();
+    clearCanvas(true);
+    pokeUI();
   </script>
 </body>
 </html>
