@@ -121,6 +121,11 @@
       transition: background 0.15s, border-color 0.15s;
     }
 
+    select option {
+      background: #1a1a1a;
+      color: #f0f0f0;
+    }
+
     select:hover, button:hover {
       background: rgba(255,255,255,0.10);
       border-color: rgba(255,255,255,0.15);
@@ -567,7 +572,10 @@ function getSensitivity()  { return parseFloat(sensitivitySlider.value); }
 function getEffectAmount() { return parseInt(effectSlider.value, 10) / 100; } // 0–1
 function getTrailAmount()  { return parseInt(trailSlider.value, 10); }
 
-function applySensitivity(v) { return Math.min(1, Math.pow(v * getSensitivity(), 0.92)); }
+function applySensitivity(v) {
+  const boosted = v * getSensitivity();
+  return Math.min(1, Math.pow(boosted, 0.92));
+}
 
 function rebuildDataArrays() {
   if (!analyser) return;
@@ -730,8 +738,10 @@ function drawBars(frame, t) {
   const bw = canvas.width / levels.length;
   for (const lv of levels) {
     const h = lv.value * canvas.height * 0.96;
+    const x = lv.normPos * canvas.width;
+    const y = canvas.height - h;
     ctx.fillStyle = getModeColor(frame, lv.bandIndex, lv.normPos, lv.value);
-    ctx.fillRect(lv.normPos * canvas.width, canvas.height-h, Math.max(2,bw-2), h);
+    ctx.fillRect(x, y, Math.max(2, bw - 2), h);
   }
   ctx.shadowBlur = 0;
 }
