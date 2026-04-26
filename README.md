@@ -1,4 +1,5 @@
-# FrequenzyVisualizer
+# Frequency Visualizer
+
 A modular audio-reactive canvas visualizer.
 
 The goal of this project is to make it easy for people to add new creative pieces without needing to understand the entire codebase.
