@@ -1148,7 +1148,13 @@ function drawWave(frame, t) {
   ctx.shadowBlur=16+frame.bass*12; ctx.shadowColor=frame.colors[0];
   for (let i=0; i<timeData.length; i++) {
     const x = (i/(timeData.length-1))*canvas.width;
-    let v = (timeData[i]-128)/128;
+    let v = (timeData[i] - 128) / 128;
+
+// Browser/system capture often gives a calmer waveform.
+// Boost only the visual wave reading, not the actual audio.
+if (sourceModeSelect?.value === "display") {
+  v *= 1.8;
+}
     // Apply behaviour to wave amplitude
     if (behav==="wobbly")   v += Math.sin(i*0.08+t*3.2)*effect*0.4;
     if (behav==="bouncy")   v *= 1+frame.bass*effect*1.4;
