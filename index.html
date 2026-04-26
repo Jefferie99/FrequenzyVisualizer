@@ -284,8 +284,8 @@
     #effectSlider::-webkit-slider-thumb { background: var(--accent2); box-shadow: 0 0 5px rgba(255,46,166,0.5); }
     #effectSlider::-moz-range-thumb     { background: var(--accent2); }
 
-    /* Hide intensity when behaviour is Rigid */
-    #intensityWrap.hidden-ctrl { display: none; }
+    /* Hide UI elements when needed */
+    .hidden-ctrl { display: none !important; }
 
     input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; }
 
@@ -423,8 +423,17 @@
 
     <div class="divider"></div>
 
-    <!-- Device — auto-applies on change, no extra button needed -->
-    <div class="tip">
+    <!-- Audio source -->
+    <label>
+      Source
+      <select id="sourceModeSelect" title="Choose where audio comes from">
+        <option value="mic" selected>Mic / VB Cable</option>
+        <option value="display">Browser tab / PC audio</option>
+      </select>
+    </label>
+
+    <!-- Device — only shown for mic mode -->
+    <div class="tip" id="deviceSelectWrap">
       <select id="deviceSelect" style="max-width:200px" title="Select input device — changes apply immediately">
         <option value="">Default mic / VB Cable</option>
       </select>
@@ -637,7 +646,9 @@ const trailSlider       = document.getElementById("trailSlider");
 const trailValue        = document.getElementById("trailValue");
 const effectSlider      = document.getElementById("effectSlider");
 const effectValue       = document.getElementById("effectValue");
+const sourceModeSelect  = document.getElementById("sourceModeSelect");
 const deviceSelect      = document.getElementById("deviceSelect");
+const deviceSelectWrap  = document.getElementById("deviceSelectWrap");
 const autoHideChk       = document.getElementById("autoHideChk");
 const statusBadge       = document.getElementById("statusBadge");
 const hint              = document.getElementById("hint");
@@ -1310,46 +1321,130 @@ function cleanupAudio() {
   freqData=null; timeData=null;
 }
 
-async function startVisualizer(deviceId="") {
+function setupAnalyserFromStream(stream) {
+  mediaStream = stream;
+
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = parseInt(fftSizeSelect.value, 10);
+  analyser.smoothingTimeConstant = 0.84;
+  analyser.minDecibels = -90;
+  analyser.maxDecibels = -10;
+  rebuildDataArrays();
+
+  sourceNode = audioCtx.createMediaStreamSource(mediaStream);
+
+  silentGain = audioCtx.createGain();
+  silentGain.gain.value = 0;
+
+  sourceNode.connect(analyser);
+  analyser.connect(silentGain);
+  silentGain.connect(audioCtx.destination);
+
+  startBtn.disabled = true;
+  startBtn.classList.add("running");
+  stopBtn.disabled = false;
+
+  setStatus("Live ✦", "active");
+  pokeUI();
+  draw();
+}
+
+async function prepareAudioContext() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+
+  if (audioCtx.state === "suspended") {
+    await audioCtx.resume();
+  }
+}
+
+async function startMicVisualizer(deviceId = "") {
   try {
     cleanupAudio();
-    setStatus("Starting…");
-    if (!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
-    if (audioCtx.state==="suspended") await audioCtx.resume();
+    setStatus("Starting mic…");
+
+    await prepareAudioContext();
 
     const constraints = {
-      audio: { echoCancellation:false, noiseSuppression:false, autoGainControl:false }
+      audio: {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false
+      }
     };
-    if (deviceId) constraints.audio.deviceId = { exact: deviceId };
 
-    mediaStream  = await navigator.mediaDevices.getUserMedia(constraints);
+    if (deviceId) {
+      constraints.audio.deviceId = { exact: deviceId };
+    }
+
+    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+
     currentDeviceId = deviceId;
+    setupAnalyserFromStream(stream);
 
-    analyser = audioCtx.createAnalyser();
-    analyser.fftSize = parseInt(fftSizeSelect.value,10);
-    analyser.smoothingTimeConstant = 0.84;
-    analyser.minDecibels = -90;
-    analyser.maxDecibels = -10;
-    rebuildDataArrays();
-
-    sourceNode = audioCtx.createMediaStreamSource(mediaStream);
-    silentGain = audioCtx.createGain(); silentGain.gain.value=0;
-    sourceNode.connect(analyser);
-    analyser.connect(silentGain);
-    silentGain.connect(audioCtx.destination);
-
-    startBtn.disabled = true;
-    startBtn.classList.add("running");
-    stopBtn.disabled  = false;
-    await loadDevices(); deviceSelect.value = currentDeviceId;
+    await loadDevices();
+    deviceSelect.value = currentDeviceId;
     deviceSelect.classList.remove("needs-apply");
-    setStatus("Live ✦", "active");
-    pokeUI(); draw();
-  } catch(err) {
+
+  } catch (err) {
     console.error(err);
     setStatus("Error", "error");
-    alert("Microphone error: "+err.message);
+    alert("Microphone error: " + err.message);
   }
+}
+
+async function startDisplayAudioVisualizer() {
+  try {
+    cleanupAudio();
+    setStatus("Choose source…");
+
+    await prepareAudioContext();
+
+    const stream = await navigator.mediaDevices.getDisplayMedia({
+      video: true,
+
+      audio: {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false
+      },
+
+      // Browser hints.
+      // Some browsers may ignore these.
+      systemAudio: "include",
+      windowAudio: "system",
+      surfaceSwitching: "include"
+    });
+
+    const audioTracks = stream.getAudioTracks();
+
+    if (!audioTracks.length) {
+      stream.getTracks().forEach(track => track.stop());
+      throw new Error("No audio was shared. Try again and enable 'Share tab audio' or 'Share system audio' in the browser picker.");
+    }
+
+    currentDeviceId = "";
+    setupAnalyserFromStream(stream);
+
+  } catch (err) {
+    console.error(err);
+    setStatus("Error", "error");
+
+    if (err.name === "NotAllowedError") {
+      alert("Audio capture was cancelled or blocked.");
+    } else {
+      alert("Audio capture error: " + err.message);
+    }
+  }
+}
+
+async function startVisualizer(deviceId = "") {
+  if (sourceModeSelect.value === "display") {
+    return startDisplayAudioVisualizer();
+  }
+
+  return startMicVisualizer(deviceId);
 }
 
 function stopVisualizer() {
@@ -1365,12 +1460,34 @@ function stopVisualizer() {
 startBtn.addEventListener("click", () => startVisualizer(deviceSelect.value));
 stopBtn.addEventListener("click", stopVisualizer);
 
-// Device auto-applies — highlight if changed while running
-deviceSelect.addEventListener("change", () => {
+function updateSourceModeUI() {
+  const usingDisplayAudio = sourceModeSelect.value === "display";
+
+  deviceSelectWrap.classList.toggle("hidden-ctrl", usingDisplayAudio);
+  deviceSelect.disabled = usingDisplayAudio;
+
+  startBtn.textContent = usingDisplayAudio ? "▶ Choose audio" : "▶ Start";
+
   if (!stopBtn.disabled) {
-    // Already running — restart with new device immediately
+    stopVisualizer();
+  }
+
+  pokeUI();
+}
+
+sourceModeSelect.addEventListener("change", updateSourceModeUI);
+
+// Device auto-applies when using mic mode
+deviceSelect.addEventListener("change", () => {
+  if (sourceModeSelect.value !== "mic") {
+    pokeUI();
+    return;
+  }
+
+  if (!stopBtn.disabled) {
     startVisualizer(deviceSelect.value);
   }
+
   pokeUI();
 });
 
@@ -1405,6 +1522,7 @@ effectValue.textContent      = effectSlider.value;
 currentBandColors = getPaletteColors("neon", getBandCount());
 renderBandColorEditors();
 updateIntensityVisibility();
+updateSourceModeUI();
 loadDevices();
 clearCanvas(true);
 pokeUI();
