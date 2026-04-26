@@ -452,11 +452,11 @@
     <div class="divider"></div>
 
     <!-- Sensitivity -->
-    <label>
-      Sensitivity
-      <input type="range" id="sensitivitySlider" min="0.5" max="4" step="0.1" value="1.8" />
-      <span class="badge" id="sensitivityValue">1.8</span>
-    </label>
+<label id="inputBoostWrap">
+  Input Boost
+  <input type="range" id="inputBoostSlider" min="1" max="5" step="0.1" value="1" />
+  <span class="badge" id="inputBoostValue">1.0</span>
+</label>
 
     <!-- Advanced toggle -->
     <button id="advancedBtn">Advanced ▾</button>
@@ -600,7 +600,7 @@
 //  AUDIO ENGINE
 // ═══════════════════════════════════════════════════════
 let audioCtx = null, analyser = null, sourceNode = null;
-let silentGain = null, mediaStream = null, rafId = null;
+let sourceGain = null, silentGain = null, mediaStream = null, rafId = null;
 let freqData = null, timeData = null, currentDeviceId = "";
 
 const PALETTES = {
@@ -642,6 +642,8 @@ const paletteSelect     = document.getElementById("paletteSelect");
 const bandColorEditors  = document.getElementById("bandColorEditors");
 const sensitivitySlider = document.getElementById("sensitivitySlider");
 const sensitivityValue  = document.getElementById("sensitivityValue");
+const inputBoostSlider  = document.getElementById("inputBoostSlider");
+const inputBoostValue   = document.getElementById("inputBoostValue");
 const trailSlider       = document.getElementById("trailSlider");
 const trailValue        = document.getElementById("trailValue");
 const effectSlider      = document.getElementById("effectSlider");
@@ -823,6 +825,7 @@ function applyPaletteSelection() {
 
 // ─── Audio helpers ───
 function getSensitivity()  { return parseFloat(sensitivitySlider.value); }
+function getInputBoost() { return parseFloat(inputBoostSlider.value); }
 function getEffectAmount() { return parseInt(effectSlider.value, 10) / 100; } // 0–1
 function getTrailAmount()  { return parseInt(trailSlider.value, 10); }
 function getSourceProfile() {
@@ -1351,8 +1354,8 @@ async function loadDevices() {
 }
 
 function cleanupAudio() {
-  if (rafId)       { cancelAnimationFrame(rafId); rafId=null; }
   if (sourceNode)  { try{sourceNode.disconnect();}catch(e){} sourceNode=null; }
+  if (sourceGain)  { try{sourceGain.disconnect();}catch(e){} sourceGain=null; }
   if (analyser)    { try{analyser.disconnect();}catch(e){} analyser=null; }
   if (silentGain)  { try{silentGain.disconnect();}catch(e){} silentGain=null; }
   if (mediaStream) { mediaStream.getTracks().forEach(t=>t.stop()); mediaStream=null; }
@@ -1369,12 +1372,16 @@ function setupAnalyserFromStream(stream) {
   analyser.maxDecibels = -10;
   rebuildDataArrays();
 
-  sourceNode = audioCtx.createMediaStreamSource(mediaStream);
+sourceNode = audioCtx.createMediaStreamSource(mediaStream);
 
+  sourceGain = audioCtx.createGain();
+  sourceGain.gain.value = getInputBoost();
+  
   silentGain = audioCtx.createGain();
   silentGain.gain.value = 0;
-
-  sourceNode.connect(analyser);
+  
+  sourceNode.connect(sourceGain);
+  sourceGain.connect(analyser);
   analyser.connect(silentGain);
   silentGain.connect(audioCtx.destination);
 
@@ -1466,6 +1473,12 @@ async function startDisplayAudioVisualizer() {
 
     currentDeviceId = "";
     setupAnalyserFromStream(stream);
+    inputBoostSlider.value = "2.0";
+    inputBoostValue.textContent = "2.0";
+    
+    if (sourceGain) {
+      sourceGain.gain.value = getInputBoost();
+    }
 
   } catch (err) {
     console.error(err);
@@ -1548,6 +1561,15 @@ postFxSelect.addEventListener("change",    () => { clearCanvas(true); pokeUI(); 
 sensitivitySlider.addEventListener("input", () => {
   sensitivityValue.textContent = Number(sensitivitySlider.value).toFixed(1); pokeUI();
 });
+inputBoostSlider.addEventListener("input", () => {
+  inputBoostValue.textContent = Number(inputBoostSlider.value).toFixed(1);
+
+  if (sourceGain) {
+    sourceGain.gain.value = getInputBoost();
+  }
+
+  pokeUI();
+});
 trailSlider.addEventListener("input", () => { trailValue.textContent=trailSlider.value; pokeUI(); });
 effectSlider.addEventListener("input",() => { effectValue.textContent=effectSlider.value; pokeUI(); });
 
@@ -1557,6 +1579,7 @@ if (navigator.mediaDevices?.addEventListener) {
 
 // ─── Init ───
 sensitivityValue.textContent = sensitivitySlider.value;
+inputBoostValue.textContent = Number(inputBoostSlider.value).toFixed(1);
 trailValue.textContent       = trailSlider.value;
 effectValue.textContent      = effectSlider.value;
 currentBandColors = getPaletteColors("neon", getBandCount());
