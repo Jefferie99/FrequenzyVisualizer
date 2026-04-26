@@ -730,7 +730,22 @@ const VISUALIZER_OPTIONS = ["bars","mirror","circle","starburst","tunnel","skyli
 const BEHAVIOUR_OPTIONS  = ["rigid","wobbly","bouncy","breathing"];
 const PALETTE_OPTIONS    = ["neon","fire","ocean","synthwave","twitch","forest","sunset","mono"];
 const POSTFX_OPTIONS     = ["none","none","none","bloom","rgbsplit","scanlines","vhs"]; // weighted toward none
+const SOURCE_PROFILES = {
+  mic: {
+    levelBoost: 1.0,
+    bassBoost: 1.0,
+    curve: 0.92,
+    smoothing: 0.84
+  },
 
+  display: {
+    levelBoost: 1.6,
+    bassBoost: 1.25,
+    curve: 0.82,
+    smoothing: 0.78
+  }
+};
+  
 function randomize() {
   visualizerSelect.value = VISUALIZER_OPTIONS[Math.floor(Math.random()*VISUALIZER_OPTIONS.length)];
   behaviourSelect.value  = BEHAVIOUR_OPTIONS[Math.floor(Math.random()*BEHAVIOUR_OPTIONS.length)];
@@ -810,10 +825,16 @@ function applyPaletteSelection() {
 function getSensitivity()  { return parseFloat(sensitivitySlider.value); }
 function getEffectAmount() { return parseInt(effectSlider.value, 10) / 100; } // 0–1
 function getTrailAmount()  { return parseInt(trailSlider.value, 10); }
-
+function getSourceProfile() {
+  return SOURCE_PROFILES[sourceModeSelect.value] || SOURCE_PROFILES.mic;
+}
+  
 function applySensitivity(v) {
-  const boosted = v * getSensitivity();
-  return Math.min(1, Math.pow(boosted, 0.92));
+  const profile = getSourceProfile();
+
+  const boosted = v * getSensitivity() * profile.levelBoost;
+
+  return Math.min(1, Math.pow(boosted, profile.curve));
 }
 
 function rebuildDataArrays() {
@@ -848,7 +869,18 @@ function getBandIndexForBin(bin, bandBins) {
 }
 
 function getBandEnergies(bandBins) {
-  return bandBins.map(b => applySensitivity(averageBins(b.low,b.high)/255));
+  const profile = getSourceProfile();
+
+  return bandBins.map((b, index) => {
+    let energy = averageBins(b.low, b.high) / 255;
+
+    // Give browser/system capture a little more low-end reaction.
+    if (index === 0) {
+      energy *= profile.bassBoost;
+    }
+
+    return applySensitivity(energy);
+  });
 }
 
 function getSpectrumLevels(count, maxFreq=16000) {
@@ -1326,7 +1358,7 @@ function setupAnalyserFromStream(stream) {
 
   analyser = audioCtx.createAnalyser();
   analyser.fftSize = parseInt(fftSizeSelect.value, 10);
-  analyser.smoothingTimeConstant = 0.84;
+  analyser.smoothingTimeConstant = getSourceProfile().smoothing;
   analyser.minDecibels = -90;
   analyser.maxDecibels = -10;
   rebuildDataArrays();
