@@ -1418,7 +1418,9 @@ async function startDisplayAudioVisualizer() {
     });
 
     const audioTracks = stream.getAudioTracks();
-
+    console.log("Display audio track settings:", audioTracks[0]?.getSettings());
+    console.log("Display audio track constraints:", audioTracks[0]?.getConstraints());
+    
     if (!audioTracks.length) {
       stream.getTracks().forEach(track => track.stop());
       throw new Error("No audio was shared. Try again and enable 'Share tab audio' or 'Share system audio' in the browser picker.");
