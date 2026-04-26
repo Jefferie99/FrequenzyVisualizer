@@ -516,6 +516,7 @@
           <option value="wave">Wave</option>
           <option value="mountain">Mountain</option>
           <option value="orbit">Orbit</option>
+          <option value="arms">Arms</option>
         </select>
       </div>
     </div>
@@ -1044,6 +1045,51 @@ function drawMirror(frame, t) {
   }
   ctx.shadowBlur = 0;
 }
+function drawArms(frame, t) {
+  let levels = getSpectrumLevels(180);
+  levels = applyBehaviour(levels, frame, t);
+  clearCanvas(false);
+  const cx = canvas.width/2, cy = canvas.height/2;
+  const pulseScale = frame.mode==="pulse" ? 1+frame.bass*0.22 : 1;
+  const base = Math.min(canvas.width,canvas.height)*0.16*pulseScale;
+  
+  let arms = 5;
+      
+  for (let i = 0; i < arms; i++)
+  {
+    ctx.save(); ctx.translate(cx,cy); ctx.lineCap="round";
+    let len = levels.length;
+    let mul = 1.0;
+    let mulSub = 1/len;
+    let add = Math.sin(t)*Math.PI*2/len;
+    let oldX = 0;
+    let oldY = 0;
+    let angle = t+Math.PI*2*i/arms;
+    for (const lv of levels) {
+        const extra = lv.value*Math.min(canvas.width,canvas.height)*mulSub*mul;
+        const x = oldX+Math.cos(angle)*(extra);
+        const y = oldY+Math.sin(angle)*(extra);
+        
+        angle += add;
+        
+        mul -= mulSub;
+        
+        ctx.beginPath();
+        ctx.strokeStyle = getModeColor(frame,lv.bandIndex,lv.normPos,lv.value);
+        ctx.lineWidth  = 1.5+lv.value*2.5;
+        ctx.shadowBlur = 10+lv.value*10;
+        ctx.shadowColor= ctx.strokeStyle;
+        ctx.moveTo(oldX, oldY);
+        ctx.lineTo(x, y);
+        ctx.stroke();
+
+        oldX = x;
+        oldY = y;
+    }
+    
+    ctx.restore();
+  }
+}  
 
 function drawCircle(frame, t) {
   let levels = getSpectrumLevels(180);
@@ -1336,6 +1382,7 @@ function draw(now=0) {
   else if (style==="wave")      drawWave(frame,t);
   else if (style==="mountain")  drawMountain(frame,t);
   else if (style==="orbit")     drawOrbit(frame,t);
+  else if (style==="arms")      drawArms(frame, t);
 
   // Stage 4 — Post FX
   applyPostFx(frame);
