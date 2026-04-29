@@ -745,7 +745,19 @@ document.addEventListener("fullscreenchange", () => {
 const VISUALIZER_OPTIONS = ["bars","mirror","circle","starburst","tunnel","skyline","dots","wave","mountain","orbit","arms","arms2","spiral"];
 const BEHAVIOUR_OPTIONS  = ["rigid","wobbly","bouncy","breathing"];
 const PALETTE_OPTIONS    = ["neon","fire","ocean","synthwave","twitch","forest","sunset","mono"];
-const POSTFX_OPTIONS     = ["none","none","bloom","glitch","scanlines","vhs","particles","shockwave","colorshift","shake"]; // weighted toward none
+const POSTFX_OPTIONS = [
+  "none", "none",
+  "bloom",
+  "glitch",
+  "scanlines",
+  "vhs",
+  "pixelate",
+  "beatflash",
+  "particles",
+  "shockwave",
+  "colorshift",
+  "shake"
+];// weighted toward none
 const SOURCE_PROFILES = {
   mic: {
     levelBoost: 1.0,
@@ -948,12 +960,17 @@ function buildLinearGradient(x0,y0,x1,y1,frame) {
 }
 
 function clearCanvas(forceSolid=false) {
-  if (forceSolid || getTrailAmount()<=0) {
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+  if (forceSolid || getTrailAmount() <= 0) {
     ctx.fillStyle = "#000";
   } else {
     ctx.fillStyle = `rgba(0,0,0,${Math.max(0.025,(100-getTrailAmount())/140)})`;
   }
-  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.restore();
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1294,6 +1311,7 @@ function drawArms2(frame, t) {
 
   // Archimedean spiral: each frequency bin sits on the spiral path,
   // then spikes outward by its energy. Trails make it feel alive.
+function drawSpiral(frame, t) {
   let levels = getSpectrumLevels(200);
   levels = applyBehaviour(levels, frame, t);
   clearCanvas(false);
@@ -1350,7 +1368,7 @@ function drawArms2(frame, t) {
 
   ctx.restore();
   ctx.shadowBlur = 0;
-
+}
 
 function drawCircle(frame, t) {
   let levels = getSpectrumLevels(180);
@@ -1827,6 +1845,10 @@ async function loadDevices() {
 }
 
 function cleanupAudio() {
+  if (rafId !== null) {
+    cancelAnimationFrame(rafId);
+    rafId = null;
+  }	
   if (sourceNode)  { try{sourceNode.disconnect();}catch(e){} sourceNode=null; }
   if (sourceGain)  { try{sourceGain.disconnect();}catch(e){} sourceGain=null; }
   if (analyser)    { try{analyser.disconnect();}catch(e){} analyser=null; }
@@ -1908,6 +1930,9 @@ async function startMicVisualizer(deviceId = "") {
   } catch (err) {
     console.error(err);
     setStatus("Error", "error");
+	startBtn.disabled = false;
+    startBtn.classList.remove("running");
+    stopBtn.disabled = true;
     alert("Microphone error: " + err.message);
   }
 }
