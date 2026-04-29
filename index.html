@@ -1709,6 +1709,7 @@ const POST_FX = {
     // not run after it). This entry is a no-op stub so the select works —
     // the actual shake logic lives in the draw loop where ctx.translate happens.
   },
+	scanlines(frame) {
     ctx.globalAlpha = 0.10;
     ctx.fillStyle = "#000";
     for (let y = 0; y < canvas.height; y += 3) {
