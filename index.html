@@ -676,7 +676,25 @@ const intensityWrap     = document.getElementById("intensityWrap");
 
 let currentBandColors = [];
 let hideTimer = null;
+//::::NEW STUFF::::///
+function populateSelectFromRegistry(selectEl, registry, selectedValue = "") {
+  const previousValue = selectedValue || selectEl.value;
 
+  selectEl.innerHTML = "";
+
+  Object.entries(registry).forEach(([id, item]) => {
+    const option = document.createElement("option");
+    option.value = id;
+    option.textContent = item.name || id;
+    option.title = item.description || "";
+    selectEl.appendChild(option);
+  });
+
+  if (registry[previousValue]) {
+    selectEl.value = previousValue;
+  }
+}
+	
 // ─── Canvas resize ───
 function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
 window.addEventListener("resize", resizeCanvas);
@@ -742,7 +760,87 @@ document.addEventListener("fullscreenchange", () => {
 });
 
 // ─── Randomize ───
-const VISUALIZER_OPTIONS = ["bars","mirror","circle","starburst","tunnel","skyline","dots","wave","mountain","orbit","arms","arms2","spiral"];
+const STYLES = {
+  bars: {
+    name: "Bars",
+    description: "Classic bottom-up frequency bars.",
+    draw: drawBars
+  },
+
+  mirror: {
+    name: "Mirror",
+    description: "Symmetrical bars mirrored from the center.",
+    draw: drawMirror
+  },
+
+  circle: {
+    name: "Circle",
+    description: "Radial spikes around a circular core.",
+    draw: drawCircle
+  },
+
+  starburst: {
+    name: "Starburst",
+    description: "Fast radial burst from the center.",
+    draw: drawStarburst
+  },
+
+  tunnel: {
+    name: "Tunnel",
+    description: "Audio-reactive circular depth rings.",
+    draw: drawTunnel
+  },
+
+  skyline: {
+    name: "Skyline",
+    description: "Frequency bars drawn like glowing buildings.",
+    draw: drawSkyline
+  },
+
+  dots: {
+    name: "Dots",
+    description: "Floating reactive dots across the screen.",
+    draw: drawDots
+  },
+
+  wave: {
+    name: "Wave",
+    description: "Time-domain waveform line.",
+    draw: drawWave
+  },
+
+  mountain: {
+    name: "Mountain",
+    description: "Filled audio-reactive mountain shape.",
+    draw: drawMountain
+  },
+
+  orbit: {
+    name: "Orbit",
+    description: "Frequency rings with orbiting particles.",
+    draw: drawOrbit
+  },
+
+  arms: {
+    name: "Arms",
+    description: "Controlled curling radial arms.",
+    draw: drawArms
+  },
+
+  arms2: {
+    name: "Arms (Chaos)",
+    description: "Chaotic organic curling arms.",
+    draw: drawArms2
+  },
+
+  spiral: {
+    name: "Spiral",
+    description: "Archimedean spiral with frequency spikes.",
+    draw: drawSpiral
+  }
+};
+
+const VISUALIZER_OPTIONS = Object.keys(STYLES);
 const BEHAVIOUR_OPTIONS  = ["rigid","wobbly","bouncy","breathing"];
 const PALETTE_OPTIONS    = ["neon","fire","ocean","synthwave","twitch","forest","sunset","mono"];
 const POSTFX_OPTIONS = [
@@ -1806,19 +1904,8 @@ function draw(now=0) {
   }
 
   // Stage 3 — Style
-  if      (style==="bars")      drawBars(frame,t);
-  else if (style==="mirror")    drawMirror(frame,t);
-  else if (style==="circle")    drawCircle(frame,t);
-  else if (style==="starburst") drawStarburst(frame,t);
-  else if (style==="tunnel")    drawTunnel(frame,t);
-  else if (style==="skyline")   drawSkyline(frame,t);
-  else if (style==="dots")      drawDots(frame,t);
-  else if (style==="wave")      drawWave(frame,t);
-  else if (style==="mountain")  drawMountain(frame,t);
-  else if (style==="orbit")     drawOrbit(frame,t);
-  else if (style==="arms")      drawArms(frame, t);
-  else if (style==="arms2")     drawArms2(frame, t);
-  else if (style==="spiral")    drawSpiral(frame, t);
+const styleDef = STYLES[style] || STYLES.bars;
+styleDef.draw(frame, t);
 
   if (doShake || doScale) ctx.restore();
 
@@ -2072,6 +2159,7 @@ if (navigator.mediaDevices?.addEventListener) {
 }
 
 // ─── Init ───
+populateSelectFromRegistry(visualizerSelect, STYLES, "bars");
 sensitivityValue.textContent = sensitivitySlider.value;
 inputBoostValue.textContent = Number(inputBoostSlider.value).toFixed(1);
 trailValue.textContent       = trailSlider.value;
