@@ -517,6 +517,7 @@
           <option value="mountain">Mountain</option>
           <option value="orbit">Orbit</option>
           <option value="arms">Arms</option>
+          <option value="spiral">Spiral</option>
         </select>
       </div>
     </div>
@@ -528,7 +529,7 @@
         <select id="postFxSelect">
           <option value="none">None</option>
           <option value="bloom">Bloom</option>
-          <option value="rgbsplit">RGB Split</option>
+          <option value="glitch">Glitch</option>
           <option value="scanlines">Scanlines</option>
           <option value="vhs">VHS</option>
           <option value="pixelate">Pixelate</option>
@@ -735,10 +736,10 @@ document.addEventListener("fullscreenchange", () => {
 });
 
 // ─── Randomize ───
-const VISUALIZER_OPTIONS = ["bars","mirror","circle","starburst","tunnel","skyline","dots","wave","mountain","orbit"];
+const VISUALIZER_OPTIONS = ["bars","mirror","circle","starburst","tunnel","skyline","dots","wave","mountain","orbit","arms","spiral"];
 const BEHAVIOUR_OPTIONS  = ["rigid","wobbly","bouncy","breathing"];
 const PALETTE_OPTIONS    = ["neon","fire","ocean","synthwave","twitch","forest","sunset","mono"];
-const POSTFX_OPTIONS     = ["none","none","none","bloom","rgbsplit","scanlines","vhs"]; // weighted toward none
+const POSTFX_OPTIONS     = ["none","none","none","bloom","glitch","scanlines","vhs"]; // weighted toward none
 const SOURCE_PROFILES = {
   mic: {
     levelBoost: 1.0,
@@ -949,12 +950,90 @@ function clearCanvas(forceSolid=false) {
   ctx.fillRect(0,0,canvas.width,canvas.height);
 }
 
+// ═══════════════════════════════════════════════════════
+//  BEAT DETECTION ENGINE
+//  Self-calibrating onset detector — no manual threshold needed.
+//  Works by comparing current bass energy against a rolling
+//  local average. Fires when energy exceeds average by a set
+//  ratio, then enforces a cooldown so one kick = one beat.
+// ═══════════════════════════════════════════════════════
+const beat = {
+  // Rolling history of raw bass energy values (circular buffer)
+  historySize: 43,          // ~700 ms at 60 fps
+  history: new Float32Array(43),
+  historyIdx: 0,
+
+  // Detection thresholds
+  triggerRatio: 1.45,       // current must be this × local average
+  cooldownMs: 280,          // minimum ms between beats
+
+  // State
+  lastBeatTime: 0,
+  active: false,            // true for the frame the beat fired
+  strength: 0,              // 0–1, how far above threshold this beat was
+  age: 0,                   // ms since last beat (for animation decay)
+
+  // Visual decay values (updated every frame)
+  flashAlpha: 0,            // 0–1 fade for the screen flash
+  scaleOffset: 0,           // 0–1 for canvas scale pulse
+
+  update(rawBass, nowMs) {
+    // Push current energy into circular buffer
+    this.history[this.historyIdx] = rawBass;
+    this.historyIdx = (this.historyIdx + 1) % this.historySize;
+
+    // Compute local average
+    let sum = 0;
+    for (let i = 0; i < this.historySize; i++) sum += this.history[i];
+    const avg = sum / this.historySize;
+
+    // Detect onset
+    const cooldownOk = (nowMs - this.lastBeatTime) > this.cooldownMs;
+    const overThreshold = avg > 0.01 && rawBass > avg * this.triggerRatio;
+
+    if (overThreshold && cooldownOk) {
+      this.active   = true;
+      this.strength = Math.min(1, (rawBass / (avg * this.triggerRatio) - 1) * 2);
+      this.lastBeatTime = nowMs;
+      this.age      = 0;
+      this.flashAlpha  = 0.18 + this.strength * 0.22;
+      this.scaleOffset = 0.025 + this.strength * 0.025;
+    } else {
+      this.active = false;
+      this.age    = nowMs - this.lastBeatTime;
+    }
+
+    // Decay flash and scale smoothly between frames
+    this.flashAlpha  = Math.max(0, this.flashAlpha  - 0.032);
+    this.scaleOffset = Math.max(0, this.scaleOffset - 0.004);
+  },
+
+  reset() {
+    this.history.fill(0);
+    this.historyIdx  = 0;
+    this.lastBeatTime = 0;
+    this.active      = false;
+    this.strength    = 0;
+    this.age         = 0;
+    this.flashAlpha  = 0;
+    this.scaleOffset = 0;
+  }
+};
+
 function getFrameData() {
   const bandBins    = getBandBins();
   const bandEnergies= getBandEnergies(bandBins);
   const bass        = bandEnergies[0] || 0;
   const colors      = adaptColorsToCount(currentBandColors, getBandCount());
-  return { bandBins, bandEnergies, bass, colors, mode: modeSelect.value };
+  return {
+    bandBins, bandEnergies, bass, colors, mode: modeSelect.value,
+    // Beat data available to all styles and post FX
+    beat:          beat.active,
+    beatStrength:  beat.strength,
+    beatFlash:     beat.flashAlpha,
+    beatScale:     beat.scaleOffset,
+    beatAge:       beat.age
+  };
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1046,50 +1125,124 @@ function drawMirror(frame, t) {
   ctx.shadowBlur = 0;
 }
 function drawArms(frame, t) {
-  let levels = getSpectrumLevels(180);
+  let levels = getSpectrumLevels(120);
   levels = applyBehaviour(levels, frame, t);
   clearCanvas(false);
-  const cx = canvas.width/2, cy = canvas.height/2;
-  const pulseScale = frame.mode==="pulse" ? 1+frame.bass*0.22 : 1;
-  const base = Math.min(canvas.width,canvas.height)*0.16*pulseScale;
-  
-  let arms = 5;
-      
-  for (let i = 0; i < arms; i++)
-  {
-    ctx.save(); ctx.translate(cx,cy); ctx.lineCap="round";
-    let len = levels.length;
-    let mul = 1.0;
-    let mulSub = 1/len;
-    let add = Math.sin(t)*Math.PI*2/len;
-    let oldX = 0;
-    let oldY = 0;
-    let angle = t+Math.PI*2*i/arms;
-    for (const lv of levels) {
-        const extra = lv.value*Math.min(canvas.width,canvas.height)*mulSub*mul;
-        const x = oldX+Math.cos(angle)*(extra);
-        const y = oldY+Math.sin(angle)*(extra);
-        
-        angle += add;
-        
-        mul -= mulSub;
-        
-        ctx.beginPath();
-        ctx.strokeStyle = getModeColor(frame,lv.bandIndex,lv.normPos,lv.value);
-        ctx.lineWidth  = 1.5+lv.value*2.5;
-        ctx.shadowBlur = 10+lv.value*10;
-        ctx.shadowColor= ctx.strokeStyle;
-        ctx.moveTo(oldX, oldY);
-        ctx.lineTo(x, y);
-        ctx.stroke();
 
-        oldX = x;
-        oldY = y;
+  const cx = canvas.width / 2, cy = canvas.height / 2;
+  const minDim   = Math.min(canvas.width, canvas.height);
+  const pulseScale = (frame.mode === "pulse" ? 1 + frame.bass * 0.22 : 1)
+                   * (1 + frame.beatStrength * 0.12);  // flare on beat
+
+  // Inner ring radius — arms start here, not at the center
+  const base = minDim * 0.10 * pulseScale;
+
+  const armCount = 5;
+  // Gentle constant curl per step — stable and readable, no erratic oscillation
+  const curlPerStep = (Math.PI * 2 / levels.length) * 0.40;
+
+  for (let i = 0; i < armCount; i++) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.lineCap = "round";
+
+    // Each arm starts on the inner ring, evenly spaced
+    const armAngle = t * 0.4 + (Math.PI * 2 * i) / armCount;
+    let x = Math.cos(armAngle) * base;
+    let y = Math.sin(armAngle) * base;
+    let angle = armAngle;
+
+    for (let j = 0; j < levels.length; j++) {
+      const lv = levels[j];
+
+      // Step length: audio-driven, with a gentle taper toward the tip
+      // using sqrt so the outer half of the arm stays clearly visible
+      const taper = Math.sqrt(1 - j / levels.length);
+      const step  = lv.value * minDim * (1 / levels.length) * 1.8 * taper * pulseScale;
+
+      const nx = x + Math.cos(angle) * step;
+      const ny = y + Math.sin(angle) * step;
+
+      const color = getModeColor(frame, lv.bandIndex, lv.normPos, lv.value);
+      ctx.beginPath();
+      ctx.strokeStyle = color;
+      ctx.lineWidth   = 1.5 + lv.value * 2.5;
+      ctx.shadowBlur  = 8 + lv.value * 12;
+      ctx.shadowColor = color;
+      ctx.moveTo(x, y);
+      ctx.lineTo(nx, ny);
+      ctx.stroke();
+
+      x = nx;
+      y = ny;
+      angle += curlPerStep;
     }
-    
+
     ctx.restore();
   }
-}  
+  ctx.shadowBlur = 0;
+}
+
+function drawSpiral(frame, t) {
+  // Archimedean spiral: each frequency bin sits on the spiral path,
+  // then spikes outward by its energy. Trails make it feel alive.
+  let levels = getSpectrumLevels(200);
+  levels = applyBehaviour(levels, frame, t);
+  clearCanvas(false);
+
+  const cx = canvas.width / 2, cy = canvas.height / 2;
+  const maxR      = Math.min(canvas.width, canvas.height) * 0.44;
+  const turns     = 3.5;                          // how many times the spiral wraps
+  const rotation  = t * 0.18;                     // slow continuous spin
+  const pulseScale= frame.mode === "pulse" ? 1 + frame.bass * 0.18 : 1;
+
+  ctx.save();
+  ctx.translate(cx, cy);
+
+  for (let i = 0; i < levels.length; i++) {
+    const lv = levels[i];
+    const norm  = i / (levels.length - 1);           // 0 → 1 along the spiral
+    const angle = norm * Math.PI * 2 * turns + rotation;
+    const baseR = norm * maxR * pulseScale;           // distance from centre along arm
+
+    // spike length: quiet bins are nearly invisible, loud ones leap out
+    const spike = lv.value * maxR * 0.28 * pulseScale;
+
+    const x0 = Math.cos(angle) * baseR;
+    const y0 = Math.sin(angle) * baseR;
+    const x1 = Math.cos(angle) * (baseR + spike);
+    const y1 = Math.sin(angle) * (baseR + spike);
+
+    const color = getModeColor(frame, lv.bandIndex, norm, lv.value);
+
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth   = 1.2 + lv.value * 3;
+    ctx.shadowBlur  = 8 + lv.value * 14;
+    ctx.shadowColor = color;
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y1);
+    ctx.stroke();
+  }
+
+  // Draw the spine of the spiral as a faint guide line
+  ctx.beginPath();
+  ctx.lineWidth   = 1;
+  ctx.shadowBlur  = 0;
+  ctx.strokeStyle = hexToRgba(frame.colors[0], 0.12);
+  for (let i = 0; i <= 300; i++) {
+    const norm  = i / 300;
+    const angle = norm * Math.PI * 2 * turns + rotation;
+    const r     = norm * maxR * pulseScale;
+    const x = Math.cos(angle) * r;
+    const y = Math.sin(angle) * r;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  ctx.restore();
+  ctx.shadowBlur = 0;
+}
 
 function drawCircle(frame, t) {
   let levels = getSpectrumLevels(180);
@@ -1138,24 +1291,27 @@ function drawStarburst(frame, t) {
 }
 
 function drawTunnel(frame, t) {
-  analyser.getByteFrequencyData(freqData);
+  // Fixed: now routes through getSpectrumLevels + applyBehaviour
+  // so all behaviours (wobbly, bouncy, breathing) work correctly.
+  const ringCount = Math.max(12, getBandCount() * 4);
+  let levels = getSpectrumLevels(ringCount);
+  levels = applyBehaviour(levels, frame, t);
+
   clearCanvas(false);
-  const cx=canvas.width/2, cy=canvas.height/2;
-  const maxR=Math.min(canvas.width,canvas.height)*0.43;
-  const ringCount=Math.max(12,frame.bandEnergies.length*4);
-  ctx.save(); ctx.translate(cx,cy);
-  for (let i=0; i<ringCount; i++) {
-    const bi     = i%frame.bandEnergies.length;
-    const energy = frame.bandEnergies[bi];
-    const radius = ((i+1)/ringCount)*maxR+energy*18+(frame.mode==="pulse"?frame.bass*14:0);
-    const color  = getModeColor(frame,bi,i/Math.max(1,ringCount-1),energy);
+  const cx = canvas.width/2, cy = canvas.height/2;
+  const maxR = Math.min(canvas.width, canvas.height)*0.43;
+  ctx.save(); ctx.translate(cx, cy);
+  for (let i = 0; i < levels.length; i++) {
+    const lv     = levels[i];
+    const radius = ((i+1)/levels.length)*maxR + lv.value*18 + (frame.mode==="pulse" ? frame.bass*14 : 0);
+    const color  = getModeColor(frame, lv.bandIndex, lv.normPos, lv.value);
     ctx.beginPath();
-    ctx.strokeStyle=hexToRgba(color,0.20+energy*0.70);
-    ctx.lineWidth=1+energy*4; ctx.shadowBlur=10+energy*16; ctx.shadowColor=color;
-    ctx.arc(0,0,radius, t*0.1+i*0.15, t*0.1+i*0.15+Math.PI*1.75);
+    ctx.strokeStyle = hexToRgba(color, 0.20+lv.value*0.70);
+    ctx.lineWidth = 1+lv.value*4; ctx.shadowBlur = 10+lv.value*16; ctx.shadowColor = color;
+    ctx.arc(0, 0, radius, t*0.1+i*0.15, t*0.1+i*0.15+Math.PI*1.75);
     ctx.stroke();
   }
-  ctx.restore(); ctx.shadowBlur=0;
+  ctx.restore(); ctx.shadowBlur = 0;
 }
 
 function drawSkyline(frame, t) {
@@ -1242,34 +1398,36 @@ function drawMountain(frame, t) {
 }
 
 function drawOrbit(frame, t) {
-  analyser.getByteFrequencyData(freqData);
+  // Fixed: one level per band, routed through applyBehaviour.
+  // Removed inline bouncy/breathing reimplementation — all four
+  // behaviours now work correctly and future ones will too.
+  const bc = frame.bandEnergies.length;
+  let levels = getSpectrumLevels(bc);
+  levels = applyBehaviour(levels, frame, t);
+
   clearCanvas(false);
-  const cx=canvas.width/2, cy=canvas.height/2;
-  const bc=frame.bandEnergies.length;
-  const maxR=Math.min(canvas.width,canvas.height)*0.35;
-  const effect=getEffectAmount();
-  const behav=behaviourSelect.value;
-  ctx.save(); ctx.translate(cx,cy);
-  for (let i=0; i<bc; i++) {
-    let energy=frame.bandEnergies[i];
-    if (behav==="bouncy")   energy=Math.min(1,energy*(1+frame.bass*effect*1.4));
-    if (behav==="breathing") energy=Math.min(1,energy*(1+Math.sin(t*1.1)*effect*0.35));
-    const radius=((i+1)/bc)*maxR+energy*30;
-    const color=getModeColor(frame,i,bc===1?0:i/(bc-1),energy);
+  const cx = canvas.width/2, cy = canvas.height/2;
+  const maxR = Math.min(canvas.width, canvas.height)*0.35;
+  ctx.save(); ctx.translate(cx, cy);
+  for (let i = 0; i < levels.length; i++) {
+    const lv     = levels[i];
+    const energy = lv.value;
+    const radius = ((i+1)/levels.length)*maxR + energy*30;
+    const color  = getModeColor(frame, lv.bandIndex, bc===1 ? 0 : i/(bc-1), energy);
     ctx.beginPath();
-    ctx.strokeStyle=hexToRgba(color,0.20+energy*0.45);
-    ctx.lineWidth=1.5+energy*3; ctx.shadowBlur=14+energy*14; ctx.shadowColor=color;
-    ctx.arc(0,0,radius,0,Math.PI*2); ctx.stroke();
-    const particles=3+Math.floor(energy*7);
-    for (let p=0; p<particles; p++) {
-      const angle=t*(0.35+i*0.08)+p*((Math.PI*2)/particles);
-      const r=2+energy*6;
-      ctx.beginPath(); ctx.fillStyle=color;
+    ctx.strokeStyle = hexToRgba(color, 0.20+energy*0.45);
+    ctx.lineWidth = 1.5+energy*3; ctx.shadowBlur = 14+energy*14; ctx.shadowColor = color;
+    ctx.arc(0, 0, radius, 0, Math.PI*2); ctx.stroke();
+    const particles = 3+Math.floor(energy*7);
+    for (let p = 0; p < particles; p++) {
+      const angle = t*(0.35+i*0.08) + p*((Math.PI*2)/particles);
+      const r = 2+energy*6;
+      ctx.beginPath(); ctx.fillStyle = color;
       ctx.arc(Math.cos(angle)*radius, Math.sin(angle)*radius, r, 0, Math.PI*2);
       ctx.fill();
     }
   }
-  ctx.restore(); ctx.shadowBlur=0;
+  ctx.restore(); ctx.shadowBlur = 0;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1292,23 +1450,83 @@ const POST_FX = {
     ctx.globalCompositeOperation = "source-over";
   },
 
-  rgbsplit(frame) {
-    const amount = 4 + frame.bass * 10;
-    ctx.globalCompositeOperation = "screen";
-    ctx.globalAlpha = 0.45;
-    // Red channel offset
-    ctx.filter = "url(#redChannel)";
-    // Approximate with tinted draws
-    ctx.globalAlpha = 0.25;
-    ctx.filter = "none";
-    // Draw red-shifted copy
-    ctx.shadowColor = "red";
-    ctx.globalCompositeOperation = "screen";
-    ctx.drawImage(canvas, -amount, 0, canvas.width, canvas.height);
-    // Draw blue-shifted copy
-    ctx.drawImage(canvas,  amount, 0, canvas.width, canvas.height);
+  glitch(frame, t) {
+    const w = canvas.width, h = canvas.height;
+    const bass = frame.bass;
+
+    // ── 1. True RGB channel separation ──────────────────────────────
+    // Work at half resolution for performance (4× fewer pixels).
+    // At viewing distance the difference is invisible.
+    const scale  = 0.5;
+    const sw = Math.floor(w * scale), sh = Math.floor(h * scale);
+    const shift  = Math.floor((3 + bass * 14) * scale); // px at half-res
+
+    const off = document.createElement("canvas");
+    off.width = sw; off.height = sh;
+    const offCtx = off.getContext("2d");
+    offCtx.drawImage(canvas, 0, 0, sw, sh);
+
+    const src  = offCtx.getImageData(0, 0, sw, sh);
+    const dst  = offCtx.createImageData(sw, sh);
+    const s    = src.data, d = dst.data;
+
+    for (let y = 0; y < sh; y++) {
+      for (let x = 0; x < sw; x++) {
+        const i = (y * sw + x) * 4;
+
+        // Red: sampled shift pixels to the left
+        const rSrc = x + shift < sw ? (y * sw + x + shift) * 4 : i;
+        // Green: no shift
+        const gSrc = i;
+        // Blue: sampled shift pixels to the right
+        const bSrc = x - shift >= 0  ? (y * sw + x - shift) * 4 : i;
+
+        d[i]   = s[rSrc];       // R
+        d[i+1] = s[gSrc + 1];   // G
+        d[i+2] = s[bSrc + 2];   // B
+        d[i+3] = 255;
+      }
+    }
+
+    offCtx.putImageData(dst, 0, 0);
+
+    // Blend the RGB-split layer over the canvas at partial opacity
+    // so the original colors bleed through underneath.
+    ctx.globalAlpha = 0.55 + bass * 0.25;
+    ctx.drawImage(off, 0, 0, w, h);
     ctx.globalAlpha = 1;
-    ctx.globalCompositeOperation = "source-over";
+
+    // ── 2. Horizontal slice displacement ────────────────────────────
+    // On loud bass hits spawn more slices with bigger offsets.
+    const sliceCount = Math.floor(2 + bass * 10);
+    for (let s2 = 0; s2 < sliceCount; s2++) {
+      // Each slice picks a random band of rows
+      const sliceH  = Math.floor(1 + Math.random() * (4 + bass * 18));
+      const sliceY  = Math.floor(Math.random() * (h - sliceH));
+      const offsetX = (Math.random() * 2 - 1) * (8 + bass * 48);
+
+      // Copy that strip from the canvas and repaint it displaced
+      ctx.drawImage(
+        canvas,
+        0, sliceY, w, sliceH,         // source strip
+        offsetX, sliceY, w, sliceH    // destination — shifted horizontally
+      );
+    }
+
+    // ── 3. Digital noise lines ───────────────────────────────────────
+    // Sparse white/color flashes — more frequent on transients.
+    const lineCount = Math.floor(bass * 6);
+    for (let l = 0; l < lineCount; l++) {
+      const ly     = Math.floor(Math.random() * h);
+      const lw     = Math.floor(w * (0.1 + Math.random() * 0.9));
+      const lx     = Math.floor(Math.random() * (w - lw));
+      const bright = 0.4 + Math.random() * 0.6;
+      ctx.globalAlpha = bright * (0.4 + bass * 0.5);
+      // Alternate between white and a palette color for variety
+      ctx.fillStyle = Math.random() > 0.5 ? "#ffffff" : frame.colors[0];
+      ctx.fillRect(lx, ly, lw, 1 + Math.floor(Math.random() * 2));
+    }
+    ctx.globalAlpha = 1;
   },
 
   scanlines() {
@@ -1353,10 +1571,10 @@ const POST_FX = {
 
 };
 
-function applyPostFx(frame) {
+function applyPostFx(frame, t) {
   const name = postFxSelect.value;
   const fn   = POST_FX[name];
-  if (fn) fn(frame);
+  if (fn) fn(frame, t);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1367,9 +1585,25 @@ function draw(now=0) {
   if (!analyser || !freqData || !timeData) return;
 
   analyser.getByteFrequencyData(freqData);
+
+  // Update beat detector with raw (pre-sensitivity) bass energy
+  const rawBass = averageBins(freqToBin(20), freqToBin(250)) / 255;
+  beat.update(rawBass, now);
+
   const frame = getFrameData();
   const t     = now * 0.001;
   const style = visualizerSelect.value;
+
+  // ── Beat: canvas scale pulse ─────────────────────────────────────
+  // A subtle zoom on kick hits — makes the whole image feel physical.
+  // We scale from the center, draw everything, then restore.
+  if (beat.scaleOffset > 0.0005) {
+    const s = 1 + beat.scaleOffset;
+    ctx.save();
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.scale(s, s);
+    ctx.translate(-canvas.width / 2, -canvas.height / 2);
+  }
 
   // Stage 3 — Style
   if      (style==="bars")      drawBars(frame,t);
@@ -1383,9 +1617,29 @@ function draw(now=0) {
   else if (style==="mountain")  drawMountain(frame,t);
   else if (style==="orbit")     drawOrbit(frame,t);
   else if (style==="arms")      drawArms(frame, t);
+  else if (style==="spiral")    drawSpiral(frame, t);
+
+  if (beat.scaleOffset > 0.0005) {
+    ctx.restore();
+  }
 
   // Stage 4 — Post FX
-  applyPostFx(frame);
+  applyPostFx(frame, t);
+
+  // ── Beat: screen flash ───────────────────────────────────────────
+  // Drawn last so it sits on top of everything including post FX.
+  // Radial gradient — bright at center, fades to transparent at edge.
+  if (beat.flashAlpha > 0.005) {
+    const cx = canvas.width / 2, cy = canvas.height / 2;
+    const r  = Math.max(canvas.width, canvas.height) * 0.75;
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+    const flashColor = frame.colors[0] || "#ffffff";
+    grad.addColorStop(0,   hexToRgba(flashColor, beat.flashAlpha * 0.9));
+    grad.addColorStop(0.4, hexToRgba(flashColor, beat.flashAlpha * 0.3));
+    grad.addColorStop(1,   hexToRgba(flashColor, 0));
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1550,6 +1804,7 @@ async function startVisualizer(deviceId = "") {
 
 function stopVisualizer() {
   cleanupAudio();
+  beat.reset();
   startBtn.disabled = false;
   startBtn.classList.remove("running");
   stopBtn.disabled  = true;
