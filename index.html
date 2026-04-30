@@ -1441,7 +1441,190 @@ function applyBehaviour(levels, frame, t) {
 // ═══════════════════════════════════════════════════════
 //  STAGE 3 — VISUALIZER STYLES
 // ═══════════════════════════════════════════════════════
+const spaceJellyState = {
+  echoes: [],
+  motes: []
+};
 
+function ensureSpaceJellyMotes(count = 80) {
+  while (spaceJellyState.motes.length < count) {
+    spaceJellyState.motes.push({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      z: 0.25 + Math.random() * 0.75,
+      drift: Math.random() * Math.PI * 2,
+      size: 0.8 + Math.random() * 2.6,
+      speed: 0.2 + Math.random() * 0.8
+    });
+  }
+}
+
+function drawSpaceJellyMotes(frame, t) {
+  ensureSpaceJellyMotes();
+
+  const colors = frame.colors?.length ? frame.colors : ["#00ffcc"];
+
+  for (let i = 0; i < spaceJellyState.motes.length; i++) {
+    const m = spaceJellyState.motes[i];
+
+    m.y += (0.12 + m.speed * m.z) * (1 + frame.bass * 0.8);
+    m.x += Math.sin(t * 0.35 + m.drift) * 0.25 * m.z;
+
+    if (m.y > canvas.height + 8) {
+      m.y = -8;
+      m.x = Math.random() * canvas.width;
+    }
+    if (m.x < -12) m.x = canvas.width + 12;
+    if (m.x > canvas.width + 12) m.x = -12;
+
+    const twinkle = 0.25 + 0.75 * Math.abs(Math.sin(t * 1.7 + m.drift));
+    const color = colors[i % colors.length];
+
+    ctx.beginPath();
+    ctx.fillStyle = hexToRgba(color, 0.06 + m.z * 0.18 * twinkle);
+    ctx.arc(m.x, m.y, m.size * (0.55 + twinkle * 0.45), 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawSpaceJellyEchoes() {
+  spaceJellyState.echoes = spaceJellyState.echoes.filter(e => e.alpha > 0.02);
+
+  for (const e of spaceJellyState.echoes) {
+    ctx.save();
+    ctx.translate(e.x, e.y);
+    ctx.rotate(e.tilt);
+
+    const bellW = e.w;
+    const bellH = e.h;
+    const rimDip = e.rimDip;
+
+    ctx.beginPath();
+
+    for (let i = 0; i <= 32; i++) {
+      const p = i / 32;
+      const x = -bellW * 0.5 + p * bellW;
+      const nx = x / (bellW * 0.5);
+      const y = -Math.sqrt(Math.max(0, 1 - nx * nx)) * bellH;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+
+    for (let i = 32; i >= 0; i--) {
+      const p = i / 32;
+      const x = -bellW * 0.5 + p * bellW;
+      const wave = Math.sin(p * Math.PI * 6 + e.phase) * rimDip;
+      const edgeShape = Math.sin(p * Math.PI);
+      const y = bellH * 0.22 + wave - edgeShape * bellH * 0.10;
+      ctx.lineTo(x, y);
+    }
+
+    ctx.closePath();
+    ctx.fillStyle = hexToRgba(e.color, e.alpha * 0.28);
+    ctx.strokeStyle = hexToRgba("#ffffff", e.alpha * 0.12);
+    ctx.lineWidth = 1.5;
+    ctx.shadowBlur = 18;
+    ctx.shadowColor = e.color;
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.restore();
+
+    e.alpha *= 0.9;
+    e.y += 0.6;
+    e.phase += 0.08;
+  }
+
+  ctx.shadowBlur = 0;
+}
+
+function drawJellyTentacleLayer(frame, levels, t, bellW, bellH, minDim, layer = "back") {
+  const tentacleCount = 18;
+  const front = layer === "front";
+
+  ctx.lineCap = "round";
+
+  for (let i = 0; i < tentacleCount; i++) {
+    if (front && i % 2 === 0) continue;
+    if (!front && i % 2 !== 0) continue;
+
+    const n = tentacleCount === 1 ? 0 : i / (tentacleCount - 1);
+    const lv = levels[Math.min(levels.length - 1, Math.floor(n * (levels.length - 1)))];
+    const energy = lv.value;
+
+    const rootX = (n - 0.5) * bellW * 0.9;
+    const rootY =
+      bellH * 0.14 +
+      Math.sin(n * Math.PI * 5 + t * 3.2) * minDim * 0.008;
+
+    const length =
+      minDim * (front ? 0.24 : 0.20) +
+      energy * minDim * (front ? 0.12 : 0.08);
+
+    const color = getModeColor(frame, lv.bandIndex, n, energy);
+    const alpha = front ? 0.26 + energy * 0.48 : 0.14 + energy * 0.22;
+    const travel = (t * 0.55 + i * 0.08) % 1;
+
+    ctx.beginPath();
+    ctx.moveTo(rootX, rootY);
+
+    let pulsePoint = null;
+    let lastX = rootX;
+    let lastY = rootY;
+
+    for (let s = 1; s <= 10; s++) {
+      const p = s / 10;
+
+      const sway =
+        Math.sin(t * 2.5 + i * 0.7 + p * 5.2) *
+        (minDim * 0.02 + energy * minDim * 0.035) *
+        (1 - p * 0.15);
+
+      const curl =
+        Math.cos(t * 1.7 + i * 0.45 + p * 7.5) *
+        minDim *
+        (front ? 0.008 : 0.006);
+
+      const x = rootX + sway + curl + (n - 0.5) * bellW * 0.08 * p;
+      const y =
+        rootY +
+        p * length +
+        Math.sin(t * 1.4 + i + p * 6.2) * minDim * 0.006;
+
+      if (!pulsePoint && p >= travel) {
+        pulsePoint = { x, y };
+      }
+
+      ctx.lineTo(x, y);
+      lastX = x;
+      lastY = y;
+    }
+
+    ctx.strokeStyle = hexToRgba(color, alpha);
+    ctx.lineWidth = (front ? 1.2 : 0.8) + energy * (front ? 3.8 : 2.0);
+    ctx.shadowBlur = (front ? 8 : 4) + energy * (front ? 18 : 8);
+    ctx.shadowColor = color;
+    ctx.stroke();
+
+    if (front && pulsePoint && energy > 0.14) {
+      ctx.beginPath();
+      ctx.fillStyle = hexToRgba(color, 0.3 + energy * 0.45);
+      ctx.arc(pulsePoint.x, pulsePoint.y, 1.4 + energy * 3.8, 0, Math.PI * 2);
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = color;
+      ctx.fill();
+    }
+
+    if (front && energy > 0.2) {
+      ctx.beginPath();
+      ctx.fillStyle = hexToRgba(color, 0.2 + energy * 0.25);
+      ctx.arc(lastX, lastY, 1 + energy * 2.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  ctx.shadowBlur = 0;
+}
 function drawBars(frame, t) {
   let levels = getSpectrumLevels(110);
   levels = applyBehaviour(levels, frame, t);
@@ -2225,190 +2408,7 @@ function drawSpaceJellyfishold(frame, t) {
   ctx.restore();
   ctx.shadowBlur = 0;
 }
-const spaceJellyState = {
-  echoes: [],
-  motes: []
-};
 
-function ensureSpaceJellyMotes(count = 80) {
-  while (spaceJellyState.motes.length < count) {
-    spaceJellyState.motes.push({
-      x: Math.random() * canvas.width,
-      y: Math.random() * canvas.height,
-      z: 0.25 + Math.random() * 0.75,
-      drift: Math.random() * Math.PI * 2,
-      size: 0.8 + Math.random() * 2.6,
-      speed: 0.2 + Math.random() * 0.8
-    });
-  }
-}
-
-function drawSpaceJellyMotes(frame, t) {
-  ensureSpaceJellyMotes();
-
-  const colors = frame.colors?.length ? frame.colors : ["#00ffcc"];
-
-  for (let i = 0; i < spaceJellyState.motes.length; i++) {
-    const m = spaceJellyState.motes[i];
-
-    m.y += (0.12 + m.speed * m.z) * (1 + frame.bass * 0.8);
-    m.x += Math.sin(t * 0.35 + m.drift) * 0.25 * m.z;
-
-    if (m.y > canvas.height + 8) {
-      m.y = -8;
-      m.x = Math.random() * canvas.width;
-    }
-    if (m.x < -12) m.x = canvas.width + 12;
-    if (m.x > canvas.width + 12) m.x = -12;
-
-    const twinkle = 0.25 + 0.75 * Math.abs(Math.sin(t * 1.7 + m.drift));
-    const color = colors[i % colors.length];
-
-    ctx.beginPath();
-    ctx.fillStyle = hexToRgba(color, 0.06 + m.z * 0.18 * twinkle);
-    ctx.arc(m.x, m.y, m.size * (0.55 + twinkle * 0.45), 0, Math.PI * 2);
-    ctx.fill();
-  }
-}
-
-function drawSpaceJellyEchoes() {
-  spaceJellyState.echoes = spaceJellyState.echoes.filter(e => e.alpha > 0.02);
-
-  for (const e of spaceJellyState.echoes) {
-    ctx.save();
-    ctx.translate(e.x, e.y);
-    ctx.rotate(e.tilt);
-
-    const bellW = e.w;
-    const bellH = e.h;
-    const rimDip = e.rimDip;
-
-    ctx.beginPath();
-
-    for (let i = 0; i <= 32; i++) {
-      const p = i / 32;
-      const x = -bellW * 0.5 + p * bellW;
-      const nx = x / (bellW * 0.5);
-      const y = -Math.sqrt(Math.max(0, 1 - nx * nx)) * bellH;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    }
-
-    for (let i = 32; i >= 0; i--) {
-      const p = i / 32;
-      const x = -bellW * 0.5 + p * bellW;
-      const wave = Math.sin(p * Math.PI * 6 + e.phase) * rimDip;
-      const edgeShape = Math.sin(p * Math.PI);
-      const y = bellH * 0.22 + wave - edgeShape * bellH * 0.10;
-      ctx.lineTo(x, y);
-    }
-
-    ctx.closePath();
-    ctx.fillStyle = hexToRgba(e.color, e.alpha * 0.28);
-    ctx.strokeStyle = hexToRgba("#ffffff", e.alpha * 0.12);
-    ctx.lineWidth = 1.5;
-    ctx.shadowBlur = 18;
-    ctx.shadowColor = e.color;
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.restore();
-
-    e.alpha *= 0.9;
-    e.y += 0.6;
-    e.phase += 0.08;
-  }
-
-  ctx.shadowBlur = 0;
-}
-
-function drawJellyTentacleLayer(frame, levels, t, bellW, bellH, minDim, layer = "back") {
-  const tentacleCount = 18;
-  const front = layer === "front";
-
-  ctx.lineCap = "round";
-
-  for (let i = 0; i < tentacleCount; i++) {
-    if (front && i % 2 === 0) continue;
-    if (!front && i % 2 !== 0) continue;
-
-    const n = tentacleCount === 1 ? 0 : i / (tentacleCount - 1);
-    const lv = levels[Math.min(levels.length - 1, Math.floor(n * (levels.length - 1)))];
-    const energy = lv.value;
-
-    const rootX = (n - 0.5) * bellW * 0.9;
-    const rootY =
-      bellH * 0.14 +
-      Math.sin(n * Math.PI * 5 + t * 3.2) * minDim * 0.008;
-
-    const length =
-      minDim * (front ? 0.24 : 0.20) +
-      energy * minDim * (front ? 0.12 : 0.08);
-
-    const color = getModeColor(frame, lv.bandIndex, n, energy);
-    const alpha = front ? 0.26 + energy * 0.48 : 0.14 + energy * 0.22;
-    const travel = (t * 0.55 + i * 0.08) % 1;
-
-    ctx.beginPath();
-    ctx.moveTo(rootX, rootY);
-
-    let pulsePoint = null;
-    let lastX = rootX;
-    let lastY = rootY;
-
-    for (let s = 1; s <= 10; s++) {
-      const p = s / 10;
-
-      const sway =
-        Math.sin(t * 2.5 + i * 0.7 + p * 5.2) *
-        (minDim * 0.02 + energy * minDim * 0.035) *
-        (1 - p * 0.15);
-
-      const curl =
-        Math.cos(t * 1.7 + i * 0.45 + p * 7.5) *
-        minDim *
-        (front ? 0.008 : 0.006);
-
-      const x = rootX + sway + curl + (n - 0.5) * bellW * 0.08 * p;
-      const y =
-        rootY +
-        p * length +
-        Math.sin(t * 1.4 + i + p * 6.2) * minDim * 0.006;
-
-      if (!pulsePoint && p >= travel) {
-        pulsePoint = { x, y };
-      }
-
-      ctx.lineTo(x, y);
-      lastX = x;
-      lastY = y;
-    }
-
-    ctx.strokeStyle = hexToRgba(color, alpha);
-    ctx.lineWidth = (front ? 1.2 : 0.8) + energy * (front ? 3.8 : 2.0);
-    ctx.shadowBlur = (front ? 8 : 4) + energy * (front ? 18 : 8);
-    ctx.shadowColor = color;
-    ctx.stroke();
-
-    if (front && pulsePoint && energy > 0.14) {
-      ctx.beginPath();
-      ctx.fillStyle = hexToRgba(color, 0.3 + energy * 0.45);
-      ctx.arc(pulsePoint.x, pulsePoint.y, 1.4 + energy * 3.8, 0, Math.PI * 2);
-      ctx.shadowBlur = 12;
-      ctx.shadowColor = color;
-      ctx.fill();
-    }
-
-    if (front && energy > 0.2) {
-      ctx.beginPath();
-      ctx.fillStyle = hexToRgba(color, 0.2 + energy * 0.25);
-      ctx.arc(lastX, lastY, 1 + energy * 2.2, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
-  ctx.shadowBlur = 0;
-}
 function drawSpaceJellyfish(frame, t) {
   let levels = getSpectrumLevels(96);
   levels = applyBehaviour(levels, frame, t);
