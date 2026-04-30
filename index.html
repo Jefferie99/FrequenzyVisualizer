@@ -582,16 +582,16 @@
       Bands
       <select id="bandSplitSelect">
         <option value="1">1 Band</option>
-        <option value="3" selected>3 Bands</option>
-        <option value="5">5 Bands</option>
+        <option value="3" >3 Bands</option>
+        <option value="5" selected>5 Bands</option>
       </select>
     </label>
     <label style="color:var(--muted);font-size:11px">
       FFT
       <div class="tip">
         <select id="fftSizeSelect">
-          <option value="1024" selected>1024</option>
-          <option value="2048">2048</option>
+          <option value="1024">1024</option>
+          <option value="2048" selected>2048</option>
           <option value="4096">4096</option>
         </select>
         <span class="tip-icon">ⓘ</span>
@@ -614,11 +614,11 @@
 //  App State
 // ═══════════════════════════════════════════════════════
 const appState = {
-  behaviour: "default",
-  style: "legacy",
+  behaviour: "rigid",
+  style: "bars",
   postFx: "none",
   palette: "neon",
-  intensity: 1
+  intensity: 0.4
 };
 // ═══════════════════════════════════════════════════════
 //  AUDIO ENGINE
@@ -968,7 +968,13 @@ function randomize() {
   visualizerSelect.value = VISUALIZER_OPTIONS[Math.floor(Math.random()*VISUALIZER_OPTIONS.length)];
   behaviourSelect.value  = BEHAVIOUR_OPTIONS[Math.floor(Math.random()*BEHAVIOUR_OPTIONS.length)];
   paletteSelect.value    = PALETTE_OPTIONS[Math.floor(Math.random()*PALETTE_OPTIONS.length)];
-  postFxSelect.value     = POSTFX_OPTIONS[Math.floor(Math.random()*POSTFX_OPTIONS.length)];
+  const postFxOptions = [
+  "none",
+  "none",
+  ...Object.keys(VisualizerModules.postFx).filter(id => id !== "none")
+];
+
+postFxSelect.value = postFxOptions[Math.floor(Math.random() * postFxOptions.length)];
   effectSlider.value     = 20 + Math.floor(Math.random() * 60);
   effectValue.textContent= effectSlider.value;
   applyPaletteSelection();
@@ -2089,6 +2095,9 @@ const styleDef =
 if (styleDef && typeof styleDef.draw === "function") {
   styleDef.draw(frame, t);
 }
+
+if (doShake || doScale) ctx.restore();
+	
   // Stage 4 — Post FX
   applyPostFx(frame, t);
 }
