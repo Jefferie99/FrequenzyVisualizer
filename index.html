@@ -950,6 +950,11 @@ tronFloor: {
   name: "Tron Floor",
   description: "Perspective neon floor grid with audio-reactive pillars.",
   draw: drawTronFloor
+},
+spaceJellyfish: {
+  name: "Space Jellyfish",
+  description: "A glowing alien jellyfish with audio-reactive tentacles.",
+  draw: drawSpaceJellyfish
 }
 };
 // ═══════════════════════════════════════════════════════
@@ -1974,7 +1979,172 @@ function drawTronFloor(frame, t) {
   ctx.fill();
 
   ctx.shadowBlur = 0;
-}	
+}
+function drawSpaceJellyfish(frame, t) {
+  let levels = getSpectrumLevels(96);
+  levels = applyBehaviour(levels, frame, t);
+
+  clearCanvas(false);
+
+  const cx = canvas.width / 2;
+  const cy = canvas.height * 0.42 + Math.sin(t * 0.9) * 18;
+  const minDim = Math.min(canvas.width, canvas.height);
+
+  const bassPulse = 1 + frame.bass * 0.28 + frame.beatStrength * 0.18;
+  const bodyW = minDim * 0.24 * bassPulse;
+  const bodyH = minDim * 0.13 * bassPulse;
+
+  // Deep-space glow behind the creature
+  const bgGlow = ctx.createRadialGradient(
+    cx, cy, 0,
+    cx, cy, minDim * 0.65
+  );
+  bgGlow.addColorStop(0, hexToRgba(frame.colors[0], 0.20 + frame.bass * 0.12));
+  bgGlow.addColorStop(0.45, hexToRgba(frame.colors[1] || frame.colors[0], 0.08));
+  bgGlow.addColorStop(1, "rgba(0,0,0,0)");
+
+  ctx.fillStyle = bgGlow;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Small drifting stars / plankton
+  for (let i = 0; i < 70; i++) {
+    const x = (Math.sin(i * 91.7) * 0.5 + 0.5) * canvas.width;
+    const y = ((Math.cos(i * 47.3 + t * 0.15) * 0.5 + 0.5) * canvas.height + t * 12) % canvas.height;
+    const twinkle = 0.15 + 0.35 * Math.abs(Math.sin(t * 2 + i));
+    const color = frame.colors[i % frame.colors.length];
+
+    ctx.beginPath();
+    ctx.fillStyle = hexToRgba(color, twinkle * 0.35);
+    ctx.arc(x, y, 0.8 + twinkle * 1.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Tentacles
+  const tentacleCount = 18;
+  const tentacleLength = minDim * (0.28 + frame.bass * 0.16);
+
+  ctx.save();
+  ctx.lineCap = "round";
+
+  for (let i = 0; i < tentacleCount; i++) {
+    const n = tentacleCount === 1 ? 0 : i / (tentacleCount - 1);
+    const spread = (n - 0.5) * bodyW * 1.35;
+
+    const lv = levels[Math.floor(n * (levels.length - 1))];
+    const energy = lv.value;
+
+    const startX = cx + spread * 0.55;
+    const startY = cy + bodyH * 0.42;
+
+    const endX = startX + Math.sin(t * 1.7 + i * 0.8) * minDim * 0.08;
+    const endY = startY + tentacleLength * (0.72 + energy * 0.55);
+
+    const wave = Math.sin(t * 2.2 + i * 0.9) * minDim * 0.08 * (0.4 + energy);
+    const color = getModeColor(frame, lv.bandIndex, n, energy);
+
+    ctx.beginPath();
+    ctx.moveTo(startX, startY);
+
+    ctx.bezierCurveTo(
+      startX + wave,
+      startY + tentacleLength * 0.25,
+      endX - wave,
+      startY + tentacleLength * 0.55,
+      endX,
+      endY
+    );
+
+    ctx.strokeStyle = hexToRgba(color, 0.35 + energy * 0.45);
+    ctx.lineWidth = 1.4 + energy * 4.5;
+    ctx.shadowBlur = 10 + energy * 18;
+    ctx.shadowColor = color;
+    ctx.stroke();
+
+    // Bright bead at the end of louder tentacles
+    if (energy > 0.18) {
+      ctx.beginPath();
+      ctx.fillStyle = hexToRgba(color, 0.45 + energy * 0.35);
+      ctx.arc(endX, endY, 2 + energy * 5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  ctx.restore();
+
+  // Jellyfish bell/body
+  const bodyGrad = ctx.createRadialGradient(
+    cx,
+    cy - bodyH * 0.2,
+    0,
+    cx,
+    cy,
+    bodyW
+  );
+
+  bodyGrad.addColorStop(0, hexToRgba("#ffffff", 0.55));
+  bodyGrad.addColorStop(0.22, hexToRgba(frame.colors[0], 0.58));
+  bodyGrad.addColorStop(0.65, hexToRgba(frame.colors[1] || frame.colors[0], 0.28));
+  bodyGrad.addColorStop(1, hexToRgba(frame.colors[2] || frame.colors[0], 0.04));
+
+  ctx.save();
+  ctx.shadowBlur = 28 + frame.bass * 35;
+  ctx.shadowColor = frame.colors[0];
+
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, bodyW * 0.5, bodyH, 0, Math.PI, 0, true);
+  ctx.quadraticCurveTo(cx + bodyW * 0.42, cy + bodyH * 0.58, cx, cy + bodyH * 0.58);
+  ctx.quadraticCurveTo(cx - bodyW * 0.42, cy + bodyH * 0.58, cx - bodyW * 0.5, cy);
+  ctx.closePath();
+
+  ctx.fillStyle = bodyGrad;
+  ctx.fill();
+
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = hexToRgba("#ffffff", 0.30 + frame.bass * 0.20);
+  ctx.stroke();
+
+  ctx.restore();
+
+  // Inner ribs inside the bell
+  ctx.save();
+  ctx.lineCap = "round";
+
+  for (let i = 0; i < 9; i++) {
+    const n = i / 8;
+    const x = cx + (n - 0.5) * bodyW * 0.72;
+    const color = getGradientColor(frame.colors, n);
+
+    ctx.beginPath();
+    ctx.moveTo(x, cy - bodyH * 0.55);
+    ctx.quadraticCurveTo(
+      cx + (n - 0.5) * bodyW * 0.35,
+      cy,
+      cx + (n - 0.5) * bodyW * 0.18,
+      cy + bodyH * 0.42
+    );
+
+    ctx.strokeStyle = hexToRgba(color, 0.22 + frame.bass * 0.25);
+    ctx.lineWidth = 1.2 + frame.bass * 2;
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = color;
+    ctx.stroke();
+  }
+
+  ctx.restore();
+
+  // Beat halo
+  if (frame.beatStrength > 0.02) {
+    ctx.beginPath();
+    ctx.arc(cx, cy, bodyW * (0.65 + frame.beatStrength * 0.35), 0, Math.PI * 2);
+    ctx.strokeStyle = hexToRgba(frame.colors[0], 0.18 + frame.beatStrength * 0.25);
+    ctx.lineWidth = 2 + frame.beatStrength * 5;
+    ctx.shadowBlur = 30;
+    ctx.shadowColor = frame.colors[0];
+    ctx.stroke();
+  }
+
+  ctx.shadowBlur = 0;
+}
 // ═══════════════════════════════════════════════════════
 //  STAGE 4 — POST-PROCESS EFFECTS
 //  Runs AFTER the visualizer draws to the canvas.
