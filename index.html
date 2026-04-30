@@ -945,7 +945,12 @@ crystalShards: {
     name: "Crystal Shards",
     description: "Sharp glowing shards rising from the audio spectrum.",
     draw: drawCrystalShards
-  }
+  },
+tronFloor: {
+  name: "Tron Floor",
+  description: "Perspective neon floor grid with audio-reactive pillars.",
+  draw: drawTronFloor
+}
 };
 // ═══════════════════════════════════════════════════════
 //  REGISTER EXISTING STYLES INTO MODULE REGISTRY
@@ -1845,6 +1850,131 @@ function drawCrystalShards(frame, t) {
   ctx.restore();
   ctx.shadowBlur = 0;
 }
+function drawTronFloor(frame, t) {
+  let levels = getSpectrumLevels(56);
+  levels = applyBehaviour(levels, frame, t);
+
+  clearCanvas(false);
+
+  const cx = canvas.width / 2;
+  const horizonY = canvas.height * 0.32;
+  const topWidth = canvas.width * 0.10;
+  const bottomWidth = canvas.width * 1.25;
+  const floorBottomY = canvas.height;
+  const rowCount = 22;
+  const colCount = 14;
+
+  const pulse = 1 + frame.bass * 0.08 + frame.beatStrength * 0.06;
+  const scroll = (t * 6) % 1;
+
+  function projectFloorPoint(u, depth) {
+    const d = Math.max(0, Math.min(1, depth));
+    const y = horizonY + Math.pow(d, 1.75) * (floorBottomY - horizonY);
+    const halfWidth =
+      ((topWidth + (bottomWidth - topWidth) * Math.pow(d, 1.12)) * pulse) / 2;
+
+    return {
+      x: cx + u * halfWidth,
+      y
+    };
+  }
+
+  // Background horizon glow
+  const glow = ctx.createRadialGradient(
+    cx, horizonY, 0,
+    cx, horizonY, canvas.height * 0.65
+  );
+  glow.addColorStop(0, hexToRgba(frame.colors[0], 0.22 + frame.bass * 0.15));
+  glow.addColorStop(0.35, hexToRgba(frame.colors[1] || frame.colors[0], 0.10));
+  glow.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Horizon line
+  ctx.beginPath();
+  ctx.moveTo(0, horizonY);
+  ctx.lineTo(canvas.width, horizonY);
+  ctx.strokeStyle = hexToRgba(frame.colors[0], 0.30);
+  ctx.lineWidth = 2;
+  ctx.shadowBlur = 10;
+  ctx.shadowColor = frame.colors[0];
+  ctx.stroke();
+
+  // Horizontal grid lines
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= rowCount; i++) {
+    let depth = (i + scroll) / rowCount;
+    if (depth > 1) depth = 1;
+
+    const left = projectFloorPoint(-1, depth);
+    const right = projectFloorPoint(1, depth);
+
+    const rowColor = getGradientColor(frame.colors, 1 - depth);
+    ctx.beginPath();
+    ctx.moveTo(left.x, left.y);
+    ctx.lineTo(right.x, right.y);
+    ctx.strokeStyle = hexToRgba(rowColor, 0.14 + depth * 0.22);
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = rowColor;
+    ctx.stroke();
+  }
+
+  // Vertical grid lines
+  for (let c = -colCount; c <= colCount; c++) {
+    const u = c / colCount;
+    const color = getGradientColor(frame.colors, (u + 1) / 2);
+
+    ctx.beginPath();
+    for (let r = 0; r <= rowCount; r++) {
+      const depth = r / rowCount;
+      const p = projectFloorPoint(u, depth);
+      if (r === 0) ctx.moveTo(p.x, p.y);
+      else ctx.lineTo(p.x, p.y);
+    }
+
+    ctx.strokeStyle = hexToRgba(color, 0.14);
+    ctx.shadowBlur = 6;
+    ctx.shadowColor = color;
+    ctx.stroke();
+  }
+
+  // Audio-reactive pillars rising from the floor
+  const pillarDepth = 0.62;
+
+  for (const lv of levels) {
+    const u = lv.normPos * 2 - 1;
+    const base = projectFloorPoint(u, pillarDepth);
+
+    const h = lv.value * canvas.height * 0.30 * (0.9 + frame.bass * 0.35);
+    const w = Math.max(2, (bottomWidth / levels.length) * 0.22);
+
+    const color = getModeColor(frame, lv.bandIndex, lv.normPos, lv.value);
+
+    // Main pillar
+    ctx.fillStyle = hexToRgba(color, 0.82);
+    ctx.shadowBlur = 14 + lv.value * 16;
+    ctx.shadowColor = color;
+    ctx.fillRect(base.x - w / 2, base.y - h, w, h);
+
+    // Bright top cap
+    ctx.fillStyle = hexToRgba("#ffffff", 0.40);
+    ctx.fillRect(base.x - w / 2, base.y - h, w, 2);
+
+    // Small reflection on the floor
+    ctx.fillStyle = hexToRgba(color, 0.14);
+    ctx.fillRect(base.x - w / 2, base.y, w, h * 0.18);
+  }
+
+  // Center vanishing glow
+  ctx.beginPath();
+  ctx.arc(cx, horizonY, 16 + frame.bass * 22, 0, Math.PI * 2);
+  ctx.fillStyle = hexToRgba(frame.colors[0], 0.18);
+  ctx.shadowBlur = 24;
+  ctx.shadowColor = frame.colors[0];
+  ctx.fill();
+
+  ctx.shadowBlur = 0;
+}	
 // ═══════════════════════════════════════════════════════
 //  STAGE 4 — POST-PROCESS EFFECTS
 //  Runs AFTER the visualizer draws to the canvas.
