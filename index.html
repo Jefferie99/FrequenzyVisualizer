@@ -813,9 +813,22 @@ window.addEventListener("mousemove", pokeUI);
 window.addEventListener("mousedown", pokeUI);
 window.addEventListener("touchstart", pokeUI, { passive: true });
 window.addEventListener("keydown", e => {
-  if (e.key === "h" || e.key === "H") controls.classList.toggle("hidden");
-  if (e.key === "f" || e.key === "F") toggleFullscreen();
-  if (e.key === "r" || e.key === "R") randomize();
+  if (e.key === "h" || e.key === "H") {
+    controls.classList.toggle("hidden");
+    return;
+  }
+
+  if (e.key === "f" || e.key === "F") {
+    toggleFullscreen();
+    pokeUI();
+    return;
+  }
+
+  if (e.key === "r" || e.key === "R") {
+    randomize(false); // randomize without showing the UI
+    return;
+  }
+
   pokeUI();
 });
 controls.addEventListener("mouseenter", () => clearTimeout(hideTimer));
@@ -964,7 +977,7 @@ const SOURCE_PROFILES = {
   }
 };
   
-function randomize() {
+function randomize(showUI = true) {
   visualizerSelect.value = VISUALIZER_OPTIONS[Math.floor(Math.random()*VISUALIZER_OPTIONS.length)];
   behaviourSelect.value  = BEHAVIOUR_OPTIONS[Math.floor(Math.random()*BEHAVIOUR_OPTIONS.length)];
   paletteSelect.value    = PALETTE_OPTIONS[Math.floor(Math.random()*PALETTE_OPTIONS.length)];
@@ -980,7 +993,7 @@ postFxSelect.value = postFxOptions[Math.floor(Math.random() * postFxOptions.leng
   applyPaletteSelection();
   updateIntensityVisibility();
   clearCanvas(true);
-  pokeUI();
+  if (showUI) pokeUI();
 }
 randomBtn.addEventListener("click", randomize);
 
