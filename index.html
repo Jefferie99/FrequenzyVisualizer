@@ -951,6 +951,11 @@ tronFloor: {
   description: "Perspective neon floor grid with audio-reactive pillars.",
   draw: drawTronFloor
 },
+spaceJellyfish1: {
+  name: "Space Jellyfish1",
+  description: "A glowing alien jellyfish with audio-reactive tentacles.",
+  draw: drawSpaceJellyfish1
+},
 spaceJellyfish: {
   name: "Space Jellyfish",
   description: "A glowing alien jellyfish with audio-reactive tentacles.",
@@ -2213,6 +2218,427 @@ function drawSpaceJellyfish(frame, t) {
     ctx.strokeStyle = hexToRgba(frame.colors[0], 0.14 + frame.beatStrength * 0.22);
     ctx.lineWidth = 2 + frame.beatStrength * 4;
     ctx.shadowBlur = 24;
+    ctx.shadowColor = frame.colors[0];
+    ctx.stroke();
+  }
+
+  ctx.restore();
+  ctx.shadowBlur = 0;
+}
+const spaceJellyState = {
+  echoes: [],
+  motes: []
+};
+
+function ensureSpaceJellyMotes(count = 80) {
+  while (spaceJellyState.motes.length < count) {
+    spaceJellyState.motes.push({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      z: 0.25 + Math.random() * 0.75,
+      drift: Math.random() * Math.PI * 2,
+      size: 0.8 + Math.random() * 2.6,
+      speed: 0.2 + Math.random() * 0.8
+    });
+  }
+}
+
+function drawSpaceJellyMotes(frame, t) {
+  ensureSpaceJellyMotes();
+
+  const colors = frame.colors?.length ? frame.colors : ["#00ffcc"];
+
+  for (let i = 0; i < spaceJellyState.motes.length; i++) {
+    const m = spaceJellyState.motes[i];
+
+    m.y += (0.12 + m.speed * m.z) * (1 + frame.bass * 0.8);
+    m.x += Math.sin(t * 0.35 + m.drift) * 0.25 * m.z;
+
+    if (m.y > canvas.height + 8) {
+      m.y = -8;
+      m.x = Math.random() * canvas.width;
+    }
+    if (m.x < -12) m.x = canvas.width + 12;
+    if (m.x > canvas.width + 12) m.x = -12;
+
+    const twinkle = 0.25 + 0.75 * Math.abs(Math.sin(t * 1.7 + m.drift));
+    const color = colors[i % colors.length];
+
+    ctx.beginPath();
+    ctx.fillStyle = hexToRgba(color, 0.06 + m.z * 0.18 * twinkle);
+    ctx.arc(m.x, m.y, m.size * (0.55 + twinkle * 0.45), 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawSpaceJellyEchoes() {
+  spaceJellyState.echoes = spaceJellyState.echoes.filter(e => e.alpha > 0.02);
+
+  for (const e of spaceJellyState.echoes) {
+    ctx.save();
+    ctx.translate(e.x, e.y);
+    ctx.rotate(e.tilt);
+
+    const bellW = e.w;
+    const bellH = e.h;
+    const rimDip = e.rimDip;
+
+    ctx.beginPath();
+
+    for (let i = 0; i <= 32; i++) {
+      const p = i / 32;
+      const x = -bellW * 0.5 + p * bellW;
+      const nx = x / (bellW * 0.5);
+      const y = -Math.sqrt(Math.max(0, 1 - nx * nx)) * bellH;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+
+    for (let i = 32; i >= 0; i--) {
+      const p = i / 32;
+      const x = -bellW * 0.5 + p * bellW;
+      const wave = Math.sin(p * Math.PI * 6 + e.phase) * rimDip;
+      const edgeShape = Math.sin(p * Math.PI);
+      const y = bellH * 0.22 + wave - edgeShape * bellH * 0.10;
+      ctx.lineTo(x, y);
+    }
+
+    ctx.closePath();
+    ctx.fillStyle = hexToRgba(e.color, e.alpha * 0.28);
+    ctx.strokeStyle = hexToRgba("#ffffff", e.alpha * 0.12);
+    ctx.lineWidth = 1.5;
+    ctx.shadowBlur = 18;
+    ctx.shadowColor = e.color;
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.restore();
+
+    e.alpha *= 0.9;
+    e.y += 0.6;
+    e.phase += 0.08;
+  }
+
+  ctx.shadowBlur = 0;
+}
+
+function drawJellyTentacleLayer(frame, levels, t, bellW, bellH, minDim, layer = "back") {
+  const tentacleCount = 18;
+  const front = layer === "front";
+
+  ctx.lineCap = "round";
+
+  for (let i = 0; i < tentacleCount; i++) {
+    if (front && i % 2 === 0) continue;
+    if (!front && i % 2 !== 0) continue;
+
+    const n = tentacleCount === 1 ? 0 : i / (tentacleCount - 1);
+    const lv = levels[Math.min(levels.length - 1, Math.floor(n * (levels.length - 1)))];
+    const energy = lv.value;
+
+    const rootX = (n - 0.5) * bellW * 0.9;
+    const rootY =
+      bellH * 0.14 +
+      Math.sin(n * Math.PI * 5 + t * 3.2) * minDim * 0.008;
+
+    const length =
+      minDim * (front ? 0.24 : 0.20) +
+      energy * minDim * (front ? 0.12 : 0.08);
+
+    const color = getModeColor(frame, lv.bandIndex, n, energy);
+    const alpha = front ? 0.26 + energy * 0.48 : 0.14 + energy * 0.22;
+    const travel = (t * 0.55 + i * 0.08) % 1;
+
+    ctx.beginPath();
+    ctx.moveTo(rootX, rootY);
+
+    let pulsePoint = null;
+    let lastX = rootX;
+    let lastY = rootY;
+
+    for (let s = 1; s <= 10; s++) {
+      const p = s / 10;
+
+      const sway =
+        Math.sin(t * 2.5 + i * 0.7 + p * 5.2) *
+        (minDim * 0.02 + energy * minDim * 0.035) *
+        (1 - p * 0.15);
+
+      const curl =
+        Math.cos(t * 1.7 + i * 0.45 + p * 7.5) *
+        minDim *
+        (front ? 0.008 : 0.006);
+
+      const x = rootX + sway + curl + (n - 0.5) * bellW * 0.08 * p;
+      const y =
+        rootY +
+        p * length +
+        Math.sin(t * 1.4 + i + p * 6.2) * minDim * 0.006;
+
+      if (!pulsePoint && p >= travel) {
+        pulsePoint = { x, y };
+      }
+
+      ctx.lineTo(x, y);
+      lastX = x;
+      lastY = y;
+    }
+
+    ctx.strokeStyle = hexToRgba(color, alpha);
+    ctx.lineWidth = (front ? 1.2 : 0.8) + energy * (front ? 3.8 : 2.0);
+    ctx.shadowBlur = (front ? 8 : 4) + energy * (front ? 18 : 8);
+    ctx.shadowColor = color;
+    ctx.stroke();
+
+    if (front && pulsePoint && energy > 0.14) {
+      ctx.beginPath();
+      ctx.fillStyle = hexToRgba(color, 0.3 + energy * 0.45);
+      ctx.arc(pulsePoint.x, pulsePoint.y, 1.4 + energy * 3.8, 0, Math.PI * 2);
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = color;
+      ctx.fill();
+    }
+
+    if (front && energy > 0.2) {
+      ctx.beginPath();
+      ctx.fillStyle = hexToRgba(color, 0.2 + energy * 0.25);
+      ctx.arc(lastX, lastY, 1 + energy * 2.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  ctx.shadowBlur = 0;
+}
+function drawSpaceJellyfish(frame, t) {
+  let levels = getSpectrumLevels(96);
+  levels = applyBehaviour(levels, frame, t);
+
+  clearCanvas(false);
+
+  const minDim = Math.min(canvas.width, canvas.height);
+
+  const swim = (Math.sin(t * 2.1) + 1) * 0.5;
+  const contract = Math.pow(swim, 1.35);
+  const beatKick = frame.beatStrength || 0;
+
+  const cx =
+    canvas.width / 2 +
+    Math.sin(t * 0.45) * minDim * 0.045;
+
+  const cy =
+    canvas.height * 0.42 +
+    Math.sin(t * 0.8) * minDim * 0.012 -
+    contract * minDim * 0.025 -
+    beatKick * minDim * 0.055;
+
+  const bellW =
+    minDim * 0.24 *
+    (1 + frame.bass * 0.10 + contract * 0.08 + beatKick * 0.10);
+
+  const bellH =
+    minDim * 0.16 *
+    (1 + frame.bass * 0.08 - contract * 0.12 + beatKick * 0.14);
+
+  const rimDip =
+    minDim * 0.012 +
+    contract * minDim * 0.016 +
+    beatKick * minDim * 0.008;
+
+  const tilt =
+    Math.sin(t * 0.7) * 0.12 +
+    Math.sin(t * 1.3) * 0.03;
+
+  drawSpaceJellyMotes(frame, t);
+
+  if (frame.beat) {
+    spaceJellyState.echoes.push({
+      x: cx,
+      y: cy,
+      w: bellW * 1.03,
+      h: bellH * 1.03,
+      rimDip,
+      tilt,
+      color: frame.colors[0] || "#00ffcc",
+      alpha: 0.26 + beatKick * 0.18,
+      phase: t * 4
+    });
+
+    if (spaceJellyState.echoes.length > 8) {
+      spaceJellyState.echoes.shift();
+    }
+  }
+
+  drawSpaceJellyEchoes();
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(tilt);
+
+  // Background body glow
+  const aura = ctx.createRadialGradient(0, 0, 0, 0, 0, minDim * 0.42);
+  aura.addColorStop(0, hexToRgba(frame.colors[0], 0.14 + frame.bass * 0.08));
+  aura.addColorStop(0.35, hexToRgba(frame.colors[1] || frame.colors[0], 0.08));
+  aura.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = aura;
+  ctx.fillRect(-minDim * 0.5, -minDim * 0.5, minDim, minDim);
+
+  // Back tentacles
+  drawJellyTentacleLayer(frame, levels, t, bellW, bellH, minDim, "back");
+
+  // Bell body
+  const bellGrad = ctx.createRadialGradient(
+    0,
+    -bellH * 0.35,
+    0,
+    0,
+    0,
+    bellW * 0.85
+  );
+  bellGrad.addColorStop(0, hexToRgba("#ffffff", 0.42));
+  bellGrad.addColorStop(0.18, hexToRgba(frame.colors[0], 0.46));
+  bellGrad.addColorStop(0.58, hexToRgba(frame.colors[1] || frame.colors[0], 0.22));
+  bellGrad.addColorStop(1, hexToRgba(frame.colors[2] || frame.colors[0], 0.04));
+
+  ctx.beginPath();
+
+  for (let i = 0; i <= 36; i++) {
+    const p = i / 36;
+    const x = -bellW * 0.5 + p * bellW;
+    const nx = x / (bellW * 0.5);
+    const y = -Math.sqrt(Math.max(0, 1 - nx * nx)) * bellH;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+
+  for (let i = 36; i >= 0; i--) {
+    const p = i / 36;
+    const x = -bellW * 0.5 + p * bellW;
+    const wave =
+      Math.sin(p * Math.PI * 6 + t * 4.9) * rimDip +
+      Math.sin(p * Math.PI * 2 + t * 2.2) * rimDip * 0.45;
+    const edgeShape = Math.sin(p * Math.PI);
+    const y = bellH * 0.22 + wave - edgeShape * bellH * 0.10;
+    ctx.lineTo(x, y);
+  }
+
+  ctx.closePath();
+  ctx.fillStyle = bellGrad;
+  ctx.shadowBlur = 24 + frame.bass * 22;
+  ctx.shadowColor = frame.colors[0];
+  ctx.fill();
+
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = hexToRgba("#ffffff", 0.22 + contract * 0.10);
+  ctx.stroke();
+
+  // Inner core
+  const coreColor = frame.colors[1] || frame.colors[0];
+  ctx.beginPath();
+  ctx.ellipse(
+    0,
+    -bellH * 0.12,
+    bellW * (0.10 + beatKick * 0.03),
+    bellH * (0.15 + beatKick * 0.03),
+    0,
+    0,
+    Math.PI * 2
+  );
+  ctx.fillStyle = hexToRgba(coreColor, 0.22 + frame.bass * 0.16);
+  ctx.shadowBlur = 18;
+  ctx.shadowColor = coreColor;
+  ctx.fill();
+
+  // Side sacs / organs
+  for (let i = 0; i < 2; i++) {
+    const dir = i === 0 ? -1 : 1;
+    const organColor = frame.colors[2] || frame.colors[0];
+
+    ctx.beginPath();
+    ctx.ellipse(
+      dir * bellW * 0.16,
+      -bellH * 0.02,
+      bellW * 0.045,
+      bellH * 0.07,
+      dir * 0.2,
+      0,
+      Math.PI * 2
+    );
+    ctx.fillStyle = hexToRgba(organColor, 0.16 + frame.bass * 0.1);
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = organColor;
+    ctx.fill();
+  }
+
+  // Inner ribs
+  for (let i = 0; i < 8; i++) {
+    const n = i / 7;
+    const x = (n - 0.5) * bellW * 0.62;
+    const color = getGradientColor(frame.colors, n);
+
+    ctx.beginPath();
+    ctx.moveTo(x, -bellH * 0.78);
+    ctx.quadraticCurveTo(
+      x * 0.52,
+      -bellH * 0.18,
+      x * 0.20,
+      bellH * 0.12
+    );
+    ctx.strokeStyle = hexToRgba(color, 0.12 + contract * 0.12 + frame.bass * 0.08);
+    ctx.lineWidth = 1 + frame.bass * 1.4;
+    ctx.shadowBlur = 6;
+    ctx.shadowColor = color;
+    ctx.stroke();
+  }
+
+  // Oral arms
+  for (let i = 0; i < 5; i++) {
+    const n = i / 4;
+    const ox = (n - 0.5) * bellW * 0.24;
+    const oy = bellH * 0.08;
+    const len = minDim * (0.10 + contract * 0.03 + frame.bass * 0.03);
+    const color = getGradientColor(frame.colors, n);
+
+    ctx.beginPath();
+    ctx.moveTo(ox, oy);
+    ctx.bezierCurveTo(
+      ox + Math.sin(t * 2.1 + i) * minDim * 0.02,
+      oy + len * 0.28,
+      ox - Math.cos(t * 1.7 + i) * minDim * 0.028,
+      oy + len * 0.7,
+      ox + Math.sin(t * 1.25 + i) * minDim * 0.018,
+      oy + len
+    );
+    ctx.strokeStyle = hexToRgba(color, 0.20 + frame.bass * 0.16);
+    ctx.lineWidth = 1.8 + frame.bass * 2.0;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = color;
+    ctx.stroke();
+  }
+
+  // Front tentacles
+  drawJellyTentacleLayer(frame, levels, t, bellW, bellH, minDim, "front");
+
+  // Highlight
+  ctx.beginPath();
+  ctx.ellipse(
+    -bellW * 0.14,
+    -bellH * 0.36,
+    bellW * 0.12,
+    bellH * 0.17,
+    -0.45,
+    0,
+    Math.PI * 2
+  );
+  ctx.fillStyle = "rgba(255,255,255,0.12)";
+  ctx.fill();
+
+  // Beat halo
+  if (beatKick > 0.02) {
+    ctx.beginPath();
+    ctx.arc(0, 0, bellW * (0.56 + beatKick * 0.28), 0, Math.PI * 2);
+    ctx.strokeStyle = hexToRgba(frame.colors[0], 0.12 + beatKick * 0.2);
+    ctx.lineWidth = 2 + beatKick * 4;
+    ctx.shadowBlur = 20;
     ctx.shadowColor = frame.colors[0];
     ctx.stroke();
   }
