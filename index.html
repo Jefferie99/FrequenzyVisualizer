@@ -611,6 +611,16 @@
 
 <script>
 // ═══════════════════════════════════════════════════════
+//  App State
+// ═══════════════════════════════════════════════════════
+const appState = {
+  behaviour: "default",
+  style: "legacy",
+  postFx: "none",
+  palette: "neon",
+  intensity: 1
+};
+// ═══════════════════════════════════════════════════════
 //  AUDIO ENGINE
 // ═══════════════════════════════════════════════════════
 let audioCtx = null, analyser = null, sourceNode = null;
@@ -676,6 +686,61 @@ const intensityWrap     = document.getElementById("intensityWrap");
 
 let currentBandColors = [];
 let hideTimer = null;
+
+// ═══════════════════════════════════════════════════════
+//  MODULE REGISTRY
+//  This is where all behaviours, styles, post FX and palettes
+//  will eventually be collected.
+// ═══════════════════════════════════════════════════════
+const VisualizerModules = {
+  behaviours: {},
+  styles: {},
+  postFx: {},
+  palettes: {},
+
+  register(type, module) {
+    if (!this[type]) {
+      console.warn(`Unknown module type: ${type}`);
+      return;
+    }
+
+    if (!module.id) {
+      console.warn("Module is missing an id:", module);
+      return;
+    }
+
+    this[type][module.id] = module;
+  },
+
+  get(type, id) {
+    return this[type]?.[id];
+  },
+
+  list(type) {
+    return Object.values(this[type] || {});
+  }
+};
+// ═══════════════════════════════════════════════════════
+//  REGISTER EXISTING PALETTES INTO MODULE REGISTRY
+// ═══════════════════════════════════════════════════════
+Object.entries(PALETTES).forEach(([id, colors]) => {
+  const names = {
+    neon: "Neon",
+    fire: "Fire",
+    ocean: "Ocean",
+    synthwave: "Synthwave",
+    twitch: "Twitch",
+    forest: "Forest",
+    sunset: "Sunset",
+    mono: "Mono"
+  };
+
+  VisualizerModules.register("palettes", {
+    id,
+    name: names[id] || id,
+    colors
+  });
+});	
 //::::NEW STUFF::::///
 function populateSelectFromRegistry(selectEl, registry, selectedValue = "") {
   const previousValue = selectedValue || selectEl.value;
@@ -694,7 +759,32 @@ function populateSelectFromRegistry(selectEl, registry, selectedValue = "") {
     selectEl.value = previousValue;
   }
 }
-	
+function populatePaletteSelectFromRegistry(selectedValue = "neon") {
+  const previousValue = selectedValue || paletteSelect.value;
+
+  paletteSelect.innerHTML = "";
+
+  // Custom is special. It is not a normal registered palette.
+  const customOption = document.createElement("option");
+  customOption.value = "custom";
+  customOption.textContent = "Custom";
+  customOption.title = "Use the manual band color pickers.";
+  paletteSelect.appendChild(customOption);
+
+  Object.entries(VisualizerModules.palettes).forEach(([id, palette]) => {
+    const option = document.createElement("option");
+    option.value = id;
+    option.textContent = palette.name || id;
+    option.title = palette.description || "";
+    paletteSelect.appendChild(option);
+  });
+
+  if (previousValue === "custom" || VisualizerModules.palettes[previousValue]) {
+    paletteSelect.value = previousValue;
+  } else {
+    paletteSelect.value = "neon";
+  }
+}	
 // ─── Canvas resize ───
 function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
 window.addEventListener("resize", resizeCanvas);
@@ -839,23 +929,25 @@ const STYLES = {
     draw: drawSpiral
   }
 };
+// ═══════════════════════════════════════════════════════
+//  REGISTER EXISTING STYLES INTO MODULE REGISTRY
+// ═══════════════════════════════════════════════════════
+Object.entries(STYLES).forEach(([id, style]) => {
+  VisualizerModules.register("styles", {
+    id,
+    name: style.name || id,
+    description: style.description || "",
+    draw: style.draw
+  });
+});
 
-const VISUALIZER_OPTIONS = Object.keys(STYLES);
+const VISUALIZER_OPTIONS = Object.keys(VisualizerModules.styles);
 const BEHAVIOUR_OPTIONS  = ["rigid","wobbly","bouncy","breathing"];
-const PALETTE_OPTIONS    = ["neon","fire","ocean","synthwave","twitch","forest","sunset","mono"];
+const PALETTE_OPTIONS = Object.keys(VisualizerModules.palettes);
 const POSTFX_OPTIONS = [
   "none", "none",
-  "bloom",
-  "glitch",
-  "scanlines",
-  "vhs",
-  "pixelate",
-  "beatflash",
-  "particles",
-  "shockwave",
-  "colorshift",
-  "shake"
-];// weighted toward none
+  ...Object.keys(VisualizerModules.postFx).filter(id => id !== "none")
+]; // weighted toward none
 const SOURCE_PROFILES = {
   mic: {
     levelBoost: 1.0,
@@ -924,8 +1016,15 @@ function adaptColorsToCount(colors, count) {
 }
 
 function getPaletteColors(name, count) {
-  if (name === "custom") return adaptColorsToCount(currentBandColors, count);
-  return adaptColorsToCount(PALETTES[name] || PALETTES.neon, count);
+  if (name === "custom") {
+    return adaptColorsToCount(currentBandColors, count);
+  }
+
+  const palette =
+    VisualizerModules.get("palettes", name) ||
+    VisualizerModules.get("palettes", "neon");
+
+  return adaptColorsToCount(palette.colors, count);
 }
 
 function renderBandColorEditors() {
@@ -1260,12 +1359,44 @@ const BEHAVIOURS = {
   }
 
 };
+// ═══════════════════════════════════════════════════════
+//  REGISTER EXISTING BEHAVIOURS INTO MODULE REGISTRY
+// ═══════════════════════════════════════════════════════
+Object.entries(BEHAVIOURS).forEach(([id, applyFn]) => {
+  const names = {
+    rigid: "Rigid",
+    wobbly: "Wobbly",
+    bouncy: "Bouncy",
+    breathing: "Breathing"
+  };
 
+  const descriptions = {
+    rigid: "Passes the audio levels through unchanged.",
+    wobbly: "Adds sine-wave movement to the audio levels.",
+    bouncy: "Boosts movement based on bass energy.",
+    breathing: "Adds a slow pulsing movement to the whole visual."
+  };
+
+  VisualizerModules.register("behaviours", {
+    id,
+    name: names[id] || id,
+    description: descriptions[id] || "",
+    apply: applyFn
+  });
+});
 function applyBehaviour(levels, frame, t) {
-  const name   = behaviourSelect.value;
+  const name = behaviourSelect.value;
   const effect = getEffectAmount();
-  const fn     = BEHAVIOURS[name] || BEHAVIOURS.rigid;
-  return fn(levels, frame, t, effect);
+
+  const behaviour =
+    VisualizerModules.get("behaviours", name) ||
+    VisualizerModules.get("behaviours", "rigid");
+
+  if (!behaviour || typeof behaviour.apply !== "function") {
+    return levels;
+  }
+
+  return behaviour.apply(levels, frame, t, effect);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1866,11 +1997,58 @@ const POST_FX = {
   }
 
 };
+// ═══════════════════════════════════════════════════════
+//  REGISTER EXISTING POST FX INTO MODULE REGISTRY
+// ═══════════════════════════════════════════════════════
+Object.entries(POST_FX).forEach(([id, applyFn]) => {
+  const names = {
+    none: "None",
+    bloom: "Bloom",
+    glitch: "Glitch",
+    scanlines: "Scanlines",
+    vhs: "VHS",
+    pixelate: "Pixelate",
+    beatflash: "Beat Flash",
+    particles: "Beat Particles",
+    shockwave: "Beat Shockwave",
+    colorshift: "Beat Color Shift",
+    shake: "Beat Shake"
+  };
 
+  const descriptions = {
+    none: "No post-processing.",
+    bloom: "Adds a soft glow by redrawing the canvas with blur.",
+    glitch: "Adds RGB separation, slice displacement and noise lines.",
+    scanlines: "Adds dark horizontal scanlines.",
+    vhs: "Adds scanlines, noise and slight color bleed.",
+    pixelate: "Pixelates the final canvas image.",
+    beatflash: "Flashes the screen on detected beats.",
+    particles: "Spawns particles on detected beats.",
+    shockwave: "Spawns expanding rings on detected beats.",
+    colorshift: "Tints the canvas on detected beats.",
+    shake: "Applies beat-based camera shake in the draw loop."
+  };
+
+  VisualizerModules.register("postFx", {
+    id,
+    name: names[id] || id,
+    description: descriptions[id] || "",
+    apply: applyFn
+  });
+});
+	
 function applyPostFx(frame, t) {
   const name = postFxSelect.value;
-  const fn   = POST_FX[name];
-  if (fn) fn(frame, t);
+
+  const effect =
+    VisualizerModules.get("postFx", name) ||
+    VisualizerModules.get("postFx", "none");
+
+  if (!effect || typeof effect.apply !== "function") {
+    return;
+  }
+
+  effect.apply(frame, t);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1903,12 +2081,14 @@ function draw(now=0) {
     ctx.translate(-canvas.width / 2, -canvas.height / 2);
   }
 
-  // Stage 3 — Style
-const styleDef = STYLES[style] || STYLES.bars;
-styleDef.draw(frame, t);
+// Stage 3 — Style
+const styleDef =
+  VisualizerModules.get("styles", style) ||
+  VisualizerModules.get("styles", "bars");
 
-  if (doShake || doScale) ctx.restore();
-
+if (styleDef && typeof styleDef.draw === "function") {
+  styleDef.draw(frame, t);
+}
   // Stage 4 — Post FX
   applyPostFx(frame, t);
 }
@@ -2159,7 +2339,11 @@ if (navigator.mediaDevices?.addEventListener) {
 }
 
 // ─── Init ───
-populateSelectFromRegistry(visualizerSelect, STYLES, "bars");
+populateSelectFromRegistry(behaviourSelect, VisualizerModules.behaviours, "rigid");
+populateSelectFromRegistry(visualizerSelect, VisualizerModules.styles, "bars");
+populateSelectFromRegistry(postFxSelect, VisualizerModules.postFx, "none");
+populatePaletteSelectFromRegistry("neon");
+
 sensitivityValue.textContent = sensitivitySlider.value;
 inputBoostValue.textContent = Number(inputBoostSlider.value).toFixed(1);
 trailValue.textContent       = trailSlider.value;
