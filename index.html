@@ -1986,163 +1986,238 @@ function drawSpaceJellyfish(frame, t) {
 
   clearCanvas(false);
 
-  const cx = canvas.width / 2;
-  const cy = canvas.height * 0.42 + Math.sin(t * 0.9) * 18;
   const minDim = Math.min(canvas.width, canvas.height);
 
-  const bassPulse = 1 + frame.bass * 0.28 + frame.beatStrength * 0.18;
-  const bodyW = minDim * 0.24 * bassPulse;
-  const bodyH = minDim * 0.13 * bassPulse;
+  // Main swim cycle: this is what gives it the "jelly pulse"
+  const swim = (Math.sin(t * 2.1) + 1) * 0.5; // 0..1
+  const recoil = (Math.sin(t * 2.1 + Math.PI * 0.35) + 1) * 0.5;
 
-  // Deep-space glow behind the creature
-  const bgGlow = ctx.createRadialGradient(
-    cx, cy, 0,
-    cx, cy, minDim * 0.65
-  );
-  bgGlow.addColorStop(0, hexToRgba(frame.colors[0], 0.20 + frame.bass * 0.12));
+  // Position drift
+  const cx = canvas.width / 2 + Math.sin(t * 0.55) * minDim * 0.05;
+  const cy =
+    canvas.height * 0.40 +
+    Math.sin(t * 0.9) * 10 -
+    swim * 10;
+
+  // Bell shape changes more than just scale
+  const bassBoost = 1 + frame.bass * 0.10 + frame.beatStrength * 0.06;
+  const bellW = minDim * 0.24 * bassBoost * (1 - swim * 0.06);
+  const bellH = minDim * 0.16 * bassBoost * (1 + swim * 0.20);
+  const rimDip = minDim * 0.012 + swim * minDim * 0.018;
+  const tilt = Math.sin(t * 0.7) * 0.12;
+
+  // Background glow
+  const bgGlow = ctx.createRadialGradient(cx, cy, 0, cx, cy, minDim * 0.7);
+  bgGlow.addColorStop(0, hexToRgba(frame.colors[0], 0.18 + frame.bass * 0.10));
   bgGlow.addColorStop(0.45, hexToRgba(frame.colors[1] || frame.colors[0], 0.08));
   bgGlow.addColorStop(1, "rgba(0,0,0,0)");
-
   ctx.fillStyle = bgGlow;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // Small drifting stars / plankton
-  for (let i = 0; i < 70; i++) {
-    const x = (Math.sin(i * 91.7) * 0.5 + 0.5) * canvas.width;
-    const y = ((Math.cos(i * 47.3 + t * 0.15) * 0.5 + 0.5) * canvas.height + t * 12) % canvas.height;
-    const twinkle = 0.15 + 0.35 * Math.abs(Math.sin(t * 2 + i));
+  // Background particles / stars
+  for (let i = 0; i < 75; i++) {
+    const x = (Math.sin(i * 91.73) * 0.5 + 0.5) * canvas.width;
+    const y =
+      (((Math.cos(i * 47.13 + t * 0.12) * 0.5 + 0.5) * canvas.height) + t * 10 + i * 7) %
+      canvas.height;
+
+    const twinkle = 0.15 + 0.35 * Math.abs(Math.sin(t * 1.7 + i * 1.3));
     const color = frame.colors[i % frame.colors.length];
 
     ctx.beginPath();
-    ctx.fillStyle = hexToRgba(color, twinkle * 0.35);
-    ctx.arc(x, y, 0.8 + twinkle * 1.4, 0, Math.PI * 2);
+    ctx.fillStyle = hexToRgba(color, twinkle * 0.30);
+    ctx.arc(x, y, 0.8 + twinkle * 1.6, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  // Tentacles
-  const tentacleCount = 18;
-  const tentacleLength = minDim * (0.28 + frame.bass * 0.16);
-
   ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(tilt);
+
+  // =========================
+  // Tentacles
+  // =========================
+  const tentacleCount = 18;
+  const tentacleLength = minDim * (0.22 + frame.bass * 0.10 + swim * 0.10);
+
   ctx.lineCap = "round";
 
   for (let i = 0; i < tentacleCount; i++) {
     const n = tentacleCount === 1 ? 0 : i / (tentacleCount - 1);
-    const spread = (n - 0.5) * bodyW * 1.35;
-
     const lv = levels[Math.floor(n * (levels.length - 1))];
     const energy = lv.value;
 
-    const startX = cx + spread * 0.55;
-    const startY = cy + bodyH * 0.42;
+    const spread = (n - 0.5) * bellW * 0.95;
 
-    const endX = startX + Math.sin(t * 1.7 + i * 0.8) * minDim * 0.08;
-    const endY = startY + tentacleLength * (0.72 + energy * 0.55);
+    // Root moves with the bell rim
+    const rootX = spread;
+    const rootY =
+      bellH * 0.18 +
+      Math.sin(n * Math.PI * 4 + t * 3.2) * (rimDip * 0.7);
 
-    const wave = Math.sin(t * 2.2 + i * 0.9) * minDim * 0.08 * (0.4 + energy);
     const color = getModeColor(frame, lv.bandIndex, n, energy);
 
     ctx.beginPath();
-    ctx.moveTo(startX, startY);
+    ctx.moveTo(rootX, rootY);
 
-    ctx.bezierCurveTo(
-      startX + wave,
-      startY + tentacleLength * 0.25,
-      endX - wave,
-      startY + tentacleLength * 0.55,
-      endX,
-      endY
-    );
+    let px = rootX;
+    let py = rootY;
 
-    ctx.strokeStyle = hexToRgba(color, 0.35 + energy * 0.45);
-    ctx.lineWidth = 1.4 + energy * 4.5;
-    ctx.shadowBlur = 10 + energy * 18;
+    const segs = 9;
+    for (let s = 1; s <= segs; s++) {
+      const p = s / segs;
+
+      const lateral =
+        Math.sin(t * 2.6 + i * 0.65 + p * 4.6) * (minDim * 0.03 + energy * minDim * 0.05) * (1 - p * 0.15) +
+        Math.cos(t * 1.7 + i * 0.35 + p * 7.5) * (minDim * 0.01 + energy * minDim * 0.02);
+
+      const x = rootX + lateral + (n - 0.5) * bellW * 0.10 * p;
+      const y = rootY + p * tentacleLength + Math.sin(t * 1.8 + i + p * 6) * minDim * 0.008;
+
+      ctx.lineTo(x, y);
+      px = x;
+      py = y;
+    }
+
+    ctx.strokeStyle = hexToRgba(color, 0.28 + energy * 0.48);
+    ctx.lineWidth = 1.2 + energy * 4.2;
+    ctx.shadowBlur = 8 + energy * 18;
     ctx.shadowColor = color;
     ctx.stroke();
 
-    // Bright bead at the end of louder tentacles
-    if (energy > 0.18) {
+    // Little glowing tip on stronger strands
+    if (energy > 0.14) {
       ctx.beginPath();
-      ctx.fillStyle = hexToRgba(color, 0.45 + energy * 0.35);
-      ctx.arc(endX, endY, 2 + energy * 5, 0, Math.PI * 2);
+      ctx.fillStyle = hexToRgba(color, 0.32 + energy * 0.45);
+      ctx.arc(px, py, 1.5 + energy * 4.5, 0, Math.PI * 2);
       ctx.fill();
     }
   }
 
-  ctx.restore();
-
-  // Jellyfish bell/body
-  const bodyGrad = ctx.createRadialGradient(
-    cx,
-    cy - bodyH * 0.2,
-    0,
-    cx,
-    cy,
-    bodyW
-  );
-
-  bodyGrad.addColorStop(0, hexToRgba("#ffffff", 0.55));
-  bodyGrad.addColorStop(0.22, hexToRgba(frame.colors[0], 0.58));
-  bodyGrad.addColorStop(0.65, hexToRgba(frame.colors[1] || frame.colors[0], 0.28));
-  bodyGrad.addColorStop(1, hexToRgba(frame.colors[2] || frame.colors[0], 0.04));
-
-  ctx.save();
-  ctx.shadowBlur = 28 + frame.bass * 35;
-  ctx.shadowColor = frame.colors[0];
-
-  ctx.beginPath();
-  ctx.ellipse(cx, cy, bodyW * 0.5, bodyH, 0, Math.PI, 0, true);
-  ctx.quadraticCurveTo(cx + bodyW * 0.42, cy + bodyH * 0.58, cx, cy + bodyH * 0.58);
-  ctx.quadraticCurveTo(cx - bodyW * 0.42, cy + bodyH * 0.58, cx - bodyW * 0.5, cy);
-  ctx.closePath();
-
-  ctx.fillStyle = bodyGrad;
-  ctx.fill();
-
-  ctx.lineWidth = 2.5;
-  ctx.strokeStyle = hexToRgba("#ffffff", 0.30 + frame.bass * 0.20);
-  ctx.stroke();
-
-  ctx.restore();
-
-  // Inner ribs inside the bell
-  ctx.save();
-  ctx.lineCap = "round";
-
-  for (let i = 0; i < 9; i++) {
-    const n = i / 8;
-    const x = cx + (n - 0.5) * bodyW * 0.72;
+  // =========================
+  // Oral arms (shorter inner ribbons)
+  // =========================
+  for (let i = 0; i < 4; i++) {
+    const n = i / 3;
+    const ox = (n - 0.5) * bellW * 0.22;
+    const oy = bellH * 0.10;
+    const len = minDim * (0.11 + swim * 0.03 + frame.bass * 0.03);
     const color = getGradientColor(frame.colors, n);
 
     ctx.beginPath();
-    ctx.moveTo(x, cy - bodyH * 0.55);
-    ctx.quadraticCurveTo(
-      cx + (n - 0.5) * bodyW * 0.35,
-      cy,
-      cx + (n - 0.5) * bodyW * 0.18,
-      cy + bodyH * 0.42
+    ctx.moveTo(ox, oy);
+    ctx.bezierCurveTo(
+      ox + Math.sin(t * 2.2 + i) * minDim * 0.025,
+      oy + len * 0.30,
+      ox - Math.cos(t * 1.7 + i) * minDim * 0.03,
+      oy + len * 0.72,
+      ox + Math.sin(t * 1.2 + i) * minDim * 0.02,
+      oy + len
     );
 
-    ctx.strokeStyle = hexToRgba(color, 0.22 + frame.bass * 0.25);
-    ctx.lineWidth = 1.2 + frame.bass * 2;
-    ctx.shadowBlur = 8;
+    ctx.strokeStyle = hexToRgba(color, 0.28 + frame.bass * 0.18);
+    ctx.lineWidth = 2.2 + frame.bass * 2.5;
+    ctx.shadowBlur = 10;
     ctx.shadowColor = color;
     ctx.stroke();
   }
 
-  ctx.restore();
+  // =========================
+  // Bell body
+  // =========================
+  const bellGrad = ctx.createRadialGradient(
+    0,
+    -bellH * 0.35,
+    0,
+    0,
+    0,
+    bellW * 0.8
+  );
+  bellGrad.addColorStop(0, hexToRgba("#ffffff", 0.50));
+  bellGrad.addColorStop(0.18, hexToRgba(frame.colors[0], 0.52));
+  bellGrad.addColorStop(0.60, hexToRgba(frame.colors[1] || frame.colors[0], 0.26));
+  bellGrad.addColorStop(1, hexToRgba(frame.colors[2] || frame.colors[0], 0.04));
+
+  ctx.beginPath();
+
+  // Top dome
+  for (let i = 0; i <= 32; i++) {
+    const p = i / 32;
+    const x = -bellW * 0.5 + p * bellW;
+    const nx = x / (bellW * 0.5);
+    const y = -Math.sqrt(Math.max(0, 1 - nx * nx)) * bellH;
+
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+
+  // Frilly underside / rim
+  for (let i = 32; i >= 0; i--) {
+    const p = i / 32;
+    const x = -bellW * 0.5 + p * bellW;
+    const wave =
+      Math.sin(p * Math.PI * 6 + t * 4.8) * rimDip +
+      Math.sin(p * Math.PI * 2 + t * 2.2) * rimDip * 0.45;
+
+    const edgeShape = Math.sin(p * Math.PI);
+    const y = bellH * 0.22 + wave - edgeShape * bellH * 0.10;
+
+    ctx.lineTo(x, y);
+  }
+
+  ctx.closePath();
+
+  ctx.fillStyle = bellGrad;
+  ctx.shadowBlur = 24 + frame.bass * 20;
+  ctx.shadowColor = frame.colors[0];
+  ctx.fill();
+
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = hexToRgba("#ffffff", 0.24 + swim * 0.10);
+  ctx.stroke();
+
+  // =========================
+  // Inner ribs
+  // =========================
+  for (let i = 0; i < 8; i++) {
+    const n = i / 7;
+    const x = (n - 0.5) * bellW * 0.62;
+    const color = getGradientColor(frame.colors, n);
+
+    ctx.beginPath();
+    ctx.moveTo(x, -bellH * 0.78);
+    ctx.quadraticCurveTo(
+      x * 0.55,
+      -bellH * 0.18,
+      x * 0.22,
+      bellH * 0.12
+    );
+
+    ctx.strokeStyle = hexToRgba(color, 0.18 + swim * 0.16 + frame.bass * 0.10);
+    ctx.lineWidth = 1.1 + frame.bass * 1.6;
+    ctx.shadowBlur = 6;
+    ctx.shadowColor = color;
+    ctx.stroke();
+  }
+
+  // Highlight blob
+  ctx.beginPath();
+  ctx.ellipse(-bellW * 0.14, -bellH * 0.36, bellW * 0.13, bellH * 0.17, -0.45, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(255,255,255,0.13)";
+  ctx.fill();
 
   // Beat halo
-  if (frame.beatStrength > 0.02) {
+  if (frame.beatStrength > 0.03) {
     ctx.beginPath();
-    ctx.arc(cx, cy, bodyW * (0.65 + frame.beatStrength * 0.35), 0, Math.PI * 2);
-    ctx.strokeStyle = hexToRgba(frame.colors[0], 0.18 + frame.beatStrength * 0.25);
-    ctx.lineWidth = 2 + frame.beatStrength * 5;
-    ctx.shadowBlur = 30;
+    ctx.arc(0, 0, bellW * (0.55 + frame.beatStrength * 0.28), 0, Math.PI * 2);
+    ctx.strokeStyle = hexToRgba(frame.colors[0], 0.14 + frame.beatStrength * 0.22);
+    ctx.lineWidth = 2 + frame.beatStrength * 4;
+    ctx.shadowBlur = 24;
     ctx.shadowColor = frame.colors[0];
     ctx.stroke();
   }
 
+  ctx.restore();
   ctx.shadowBlur = 0;
 }
 // ═══════════════════════════════════════════════════════
