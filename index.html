@@ -941,6 +941,11 @@ const STYLES = {
     description: "Archimedean spiral with frequency spikes.",
     draw: drawSpiral
   }
+crystalShards: {
+    name: "Crystal Shards",
+    description: "Sharp glowing shards rising from the audio spectrum.",
+    draw: drawCrystalShards
+  }
 };
 // ═══════════════════════════════════════════════════════
 //  REGISTER EXISTING STYLES INTO MODULE REGISTRY
@@ -1803,7 +1808,43 @@ function drawOrbit(frame, t) {
   }
   ctx.restore(); ctx.shadowBlur = 0;
 }
+function drawCrystalShards(frame, t) {
+  let levels = getSpectrumLevels(90);
+  levels = applyBehaviour(levels, frame, t);
 
+  clearCanvas(false);
+
+  const baseY = canvas.height * 0.88;
+  const shardW = canvas.width / levels.length;
+  const maxH = canvas.height * 0.65;
+
+  ctx.save();
+
+  for (const lv of levels) {
+    const x = lv.normPos * canvas.width;
+    const h = lv.value * maxH;
+    const lean = Math.sin(t * 2 + lv.normPos * 10) * shardW * 0.35;
+    const color = getModeColor(frame, lv.bandIndex, lv.normPos, lv.value);
+
+    ctx.beginPath();
+    ctx.moveTo(x, baseY);
+    ctx.lineTo(x + shardW * 0.5 + lean, baseY - h);
+    ctx.lineTo(x + shardW, baseY);
+    ctx.closePath();
+
+    ctx.fillStyle = hexToRgba(color, 0.72);
+    ctx.shadowBlur = 10 + lv.value * 20;
+    ctx.shadowColor = color;
+    ctx.fill();
+
+    ctx.strokeStyle = hexToRgba("#ffffff", 0.22);
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  ctx.restore();
+  ctx.shadowBlur = 0;
+}
 // ═══════════════════════════════════════════════════════
 //  STAGE 4 — POST-PROCESS EFFECTS
 //  Runs AFTER the visualizer draws to the canvas.
