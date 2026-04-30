@@ -951,10 +951,10 @@ tronFloor: {
   description: "Perspective neon floor grid with audio-reactive pillars.",
   draw: drawTronFloor
 },
-spaceJellyfish1: {
-  name: "Space Jellyfish1",
+spaceJellyfishold: {
+  name: "Space Jellyfishold",
   description: "A glowing alien jellyfish with audio-reactive tentacles.",
-  draw: drawSpaceJellyfish1
+  draw: drawSpaceJellyfishold
 },
 spaceJellyfish: {
   name: "Space Jellyfish",
@@ -1985,7 +1985,7 @@ function drawTronFloor(frame, t) {
 
   ctx.shadowBlur = 0;
 }
-function drawSpaceJellyfish(frame, t) {
+function drawSpaceJellyfishold(frame, t) {
   let levels = getSpectrumLevels(96);
   levels = applyBehaviour(levels, frame, t);
 
