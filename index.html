@@ -122,12 +122,27 @@
     .stage-fx     .stage-label .dot { background: #ff2ea6; box-shadow: 0 0 6px #ff2ea6; }
     .stage-color  .stage-label .dot { background: #b464ff; box-shadow: 0 0 6px #b464ff; }
     .stage-tune   .stage-label .dot { background: #00c8ff; box-shadow: 0 0 6px #00c8ff; }
+    .stage-face   .stage-label .dot { background: #00e0ff; box-shadow: 0 0 6px #00e0ff; }
 
     .stage-behav  .stage-label { color: #ffa000; }
     .stage-style  .stage-label { color: #00ff88; }
     .stage-fx     .stage-label { color: #ff2ea6; }
     .stage-color  .stage-label { color: #b464ff; }
     .stage-tune   .stage-label { color: #00c8ff; }
+    .stage-face   .stage-label { color: #00e0ff; }
+
+    /* Layer badges — ties each input picker to its numbered layer */
+    .layer-badge {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 9px;
+      letter-spacing: 0.06em;
+      padding: 2px 6px;
+      border-radius: 5px;
+      margin-right: 2px;
+    }
+    .layer-badge-1 { background: rgba(0,255,136,0.14); color: #00ff88; }
+    .layer-badge-2 { background: rgba(0,224,255,0.14); color: #00e0ff; }
 
     .stage-row {
       display: flex;
@@ -423,10 +438,10 @@
 
     <div class="divider"></div>
 
-    <!-- Audio source -->
+    <!-- Layer 1 Input — drives the Layer 1 Shape below -->
     <label>
-      Source
-      <select id="sourceModeSelect" title="Choose where audio comes from">
+      <span class="layer-badge layer-badge-1">L1</span>Input
+      <select id="sourceModeSelect" title="Choose where Layer 1's audio comes from">
         <option value="mic" selected>Mic / VB Cable</option>
         <option value="display">Browser tab / PC audio</option>
       </select>
@@ -434,11 +449,25 @@
 
     <!-- Device — only shown for mic mode -->
     <div class="tip" id="deviceSelectWrap">
-      <select id="deviceSelect" style="max-width:200px" title="Select input device — changes apply immediately">
+      <select id="deviceSelect" style="max-width:180px" title="Select the device that drives Layer 1 — changes apply immediately">
         <option value="">Default mic / VB Cable</option>
       </select>
       <span class="tip-icon">ⓘ</span>
-      <span class="tip-text">Select your VB Cable or mic here.<br>Changes apply instantly — no extra button needed.</span>
+      <span class="tip-text">This device drives Layer 1 (the Shape).<br>Changes apply instantly — no extra button needed.</span>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Layer 2 Input — drives the Layer 2 Face's mouth, independent of Layer 1 -->
+    <div class="tip">
+      <label>
+        <span class="layer-badge layer-badge-2">L2</span>Input
+        <select id="voiceDeviceSelect" style="max-width:180px" title="Choose the device that drives Layer 2's mouth (only matters if Layer 2 is set to a Face)">
+          <option value="">Same as Layer 1</option>
+        </select>
+      </label>
+      <span class="tip-icon">ⓘ</span>
+      <span class="tip-text">This device drives Layer 2's mouth only<br>(e.g. a second VB Cable carrying just your voice).<br>Leave as "Same as Layer 1" to use one input for both.</span>
     </div>
 
     <div class="divider"></div>
@@ -501,9 +530,9 @@
       </div>
     </div>
 
-    <!-- ③ STYLE -->
+    <!-- ③ STYLE (Layer 1 · Shape) -->
     <div class="stage stage-style">
-      <div class="stage-label"><span class="dot"></span>Style</div>
+      <div class="stage-label"><span class="dot"></span><span class="layer-badge layer-badge-1">L1</span>Shape</div>
       <div class="stage-row">
         <select id="visualizerSelect">
           <option value="bars">Bars</option>
@@ -574,6 +603,26 @@
       </div>
     </div>
 
+    <!-- ⑥ LAYER 2 · FACE — overlays on top of Layer 1, mouth driven by the L2 Input above -->
+    <div class="stage stage-face">
+      <div class="stage-label"><span class="dot"></span><span class="layer-badge layer-badge-2">L2</span>Face</div>
+      <div class="stage-row">
+        <select id="faceLayerSelect" title="Overlay a lipsync face on top of Layer 1. Its mouth follows the L2 Input picked in the top bar.">
+          <option value="none">None</option>
+        </select>
+        <span id="faceExtras" class="hidden-ctrl">
+          <select id="faceColorSelect" title="Face accent color">
+            <option value="cyan" selected>Hologram Cyan</option>
+            <option value="ghost">Ghost White</option>
+            <option value="amber">Warm Amber</option>
+            <option value="toxic">Toxic Green</option>
+            <option value="custom">Custom</option>
+          </select>
+          <input type="color" id="faceColorSwatch" value="#00eaff" title="Custom face color" />
+        </span>
+      </div>
+    </div>
+
   </div>
 
   <!-- ADVANCED ROW (hidden by default) -->
@@ -626,6 +675,11 @@ const appState = {
 let audioCtx = null, analyser = null, sourceNode = null;
 let sourceGain = null, silentGain = null, mediaStream = null, rafId = null;
 let freqData = null, timeData = null, currentDeviceId = "";
+
+// ─── Layer 2 Input (dedicated lipsync mic/cable) — independent second chain ───
+let voiceAnalyser = null, voiceSourceNode = null, voiceGain = null, voiceMute = null;
+let voiceMediaStream = null, voiceFreqData = null, currentVoiceDeviceId = "";
+let voiceEnvelope = 0;
 
 const PALETTES = {
   neon:      ["#ff00cc","#ff7a00","#ffe600","#00ffcc","#6a5cff"],
@@ -683,6 +737,11 @@ const fullscreenBtn     = document.getElementById("fullscreenBtn");
 const advancedBtn       = document.getElementById("advancedBtn");
 const advancedRow       = document.getElementById("advancedRow");
 const intensityWrap     = document.getElementById("intensityWrap");
+const faceLayerSelect   = document.getElementById("faceLayerSelect");
+const faceExtras        = document.getElementById("faceExtras");
+const faceColorSelect   = document.getElementById("faceColorSelect");
+const faceColorSwatch   = document.getElementById("faceColorSwatch");
+const voiceDeviceSelect = document.getElementById("voiceDeviceSelect");
 
 let currentBandColors = [];
 let hideTimer = null;
@@ -697,6 +756,7 @@ const VisualizerModules = {
   styles: {},
   postFx: {},
   palettes: {},
+  faceLayers: {},
 
   register(type, module) {
     if (!this[type]) {
@@ -784,7 +844,62 @@ function populatePaletteSelectFromRegistry(selectedValue = "neon") {
   } else {
     paletteSelect.value = "neon";
   }
-}	
+}
+
+// Style select gets a manually-appended "None" — same "special extra option"
+// pattern as palette's "Custom" — so Layer 1 can run with no shape at all.
+function populateStyleSelectFromRegistry(selectedValue = "bars") {
+  const previousValue = selectedValue || visualizerSelect.value;
+
+  visualizerSelect.innerHTML = "";
+
+  Object.entries(VisualizerModules.styles).forEach(([id, style]) => {
+    const option = document.createElement("option");
+    option.value = id;
+    option.textContent = style.name || id;
+    option.title = style.description || "";
+    visualizerSelect.appendChild(option);
+  });
+
+  const noneOption = document.createElement("option");
+  noneOption.value = "none";
+  noneOption.textContent = "None";
+  noneOption.title = "No shape — useful if you only want the Layer 2 Face.";
+  visualizerSelect.appendChild(noneOption);
+
+  if (previousValue === "none" || VisualizerModules.styles[previousValue]) {
+    visualizerSelect.value = previousValue;
+  } else {
+    visualizerSelect.value = "bars";
+  }
+}
+
+// Face layer select — "None" prepended manually (registry never owns it),
+// mirroring how populatePaletteSelectFromRegistry prepends "Custom".
+function populateFaceLayerSelectFromRegistry(selectedValue = "none") {
+  const previousValue = selectedValue || faceLayerSelect.value;
+
+  faceLayerSelect.innerHTML = "";
+
+  const noneOption = document.createElement("option");
+  noneOption.value = "none";
+  noneOption.textContent = "None";
+  faceLayerSelect.appendChild(noneOption);
+
+  Object.entries(VisualizerModules.faceLayers).forEach(([id, layer]) => {
+    const option = document.createElement("option");
+    option.value = id;
+    option.textContent = layer.name || id;
+    option.title = layer.description || "";
+    faceLayerSelect.appendChild(option);
+  });
+
+  if (VisualizerModules.faceLayers[previousValue]) {
+    faceLayerSelect.value = previousValue;
+  } else {
+    faceLayerSelect.value = "none";
+  }
+}
 // ─── Canvas resize ───
 function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
 window.addEventListener("resize", resizeCanvas);
@@ -838,6 +953,27 @@ autoHideChk.addEventListener("change", () => { controls.classList.remove("hidden
 // ─── Behaviour intensity: hide when Rigid ───
 function updateIntensityVisibility() {
   intensityWrap.classList.toggle("hidden-ctrl", behaviourSelect.value === "rigid");
+}
+
+// ─── Layer 2 (Face): hide its color controls until a face is chosen ───
+function updateFaceLayerUI() {
+  faceExtras.classList.toggle("hidden-ctrl", faceLayerSelect.value === "none");
+}
+
+// ─── Layer 2 color helpers ───
+const FACE_COLOR_PRESETS = {
+  cyan:  { primary: "#00eaff", secondary: "#eafcff" },
+  ghost: { primary: "#e8e8f8", secondary: "#ffffff" },
+  amber: { primary: "#ffb347", secondary: "#fff3d6" },
+  toxic: { primary: "#6dff6d", secondary: "#eaffea" }
+};
+
+function getFaceColors() {
+  if (faceColorSelect.value === "custom") {
+    const p = faceColorSwatch.value;
+    return { primary: p, secondary: mixColors(p, "#ffffff", 0.7) };
+  }
+  return FACE_COLOR_PRESETS[faceColorSelect.value] || FACE_COLOR_PRESETS.cyan;
 }
 
 // ─── Advanced panel toggle ───
@@ -997,6 +1133,13 @@ const SOURCE_PROFILES = {
   }
 };
   
+// A dedicated Layer 2 Input means Random is free to bring the Face in/out —
+// without one, lipsync would just react to Layer 1's own mix (usually
+// music), so Random leaves the Face alone instead of faking a bad lipsync.
+function hasDedicatedVoiceInput() {
+  return !!voiceDeviceSelect.value;
+}
+
 function randomize(showUI = true) {
   visualizerSelect.value = VISUALIZER_OPTIONS[Math.floor(Math.random()*VISUALIZER_OPTIONS.length)];
   behaviourSelect.value  = BEHAVIOUR_OPTIONS[Math.floor(Math.random()*BEHAVIOUR_OPTIONS.length)];
@@ -1010,6 +1153,14 @@ function randomize(showUI = true) {
 postFxSelect.value = postFxOptions[Math.floor(Math.random() * postFxOptions.length)];
   effectSlider.value     = 20 + Math.floor(Math.random() * 60);
   effectValue.textContent= effectSlider.value;
+
+  if (hasDedicatedVoiceInput()) {
+    const faceOptions = ["none", ...Object.keys(VisualizerModules.faceLayers)];
+    faceLayerSelect.value = faceOptions[Math.floor(Math.random() * faceOptions.length)];
+    updateFaceLayerUI();
+    if (!stopBtn.disabled) maybeStartVoiceInput();
+  }
+
   applyPaletteSelection();
   updateIntensityVisibility();
   clearCanvas(true);
@@ -2647,6 +2798,207 @@ function drawSpaceJellyfish(frame, t) {
   ctx.shadowBlur = 0;
 }
 // ═══════════════════════════════════════════════════════
+//  STAGE 3B — LAYER 2 · FACE (lipsync overlay)
+//  Draws on top of Layer 1's shape, before Post FX.
+//  Mouth follows the Layer 2 Input envelope (its own mic/cable,
+//  or Layer 1's input if left on "Same as Layer 1"). Eyes/aura/sway
+//  follow Layer 1's own audio + beat, so the face still feels tied
+//  to the music underneath it.
+// ═══════════════════════════════════════════════════════
+
+// Generalized versions of freqToBin/averageBins that can read from
+// EITHER freqData (Layer 1) or voiceFreqData (Layer 2) — the originals
+// stay untouched and still hard-target freqData everywhere else.
+function freqToBinFor(data, freq) {
+  if (!data || !audioCtx) return 0;
+  const nyq = audioCtx.sampleRate / 2;
+  return Math.max(0, Math.min(data.length-1, Math.floor((Math.max(0,Math.min(freq,nyq))/nyq)*data.length)));
+}
+function averageBinsFor(data, start, end) {
+  let sum=0, count=0;
+  for (let i=Math.max(0,start); i<Math.min(data.length,end); i++) { sum+=data[i]; count++; }
+  return count ? sum/count : 0;
+}
+
+function getVoiceFreqData() {
+  if (voiceAnalyser && voiceFreqData) {
+    voiceAnalyser.getByteFrequencyData(voiceFreqData);
+    return voiceFreqData;
+  }
+  return freqData; // fallback: "Same as Layer 1"
+}
+
+const VOICE_BAND = { low: 300, high: 3400 }; // rough vocal range
+
+function updateVoiceEnvelope() {
+  const data = getVoiceFreqData();
+  if (!data || !audioCtx) { voiceEnvelope = 0; return; }
+  const lowBin  = freqToBinFor(data, VOICE_BAND.low);
+  const highBin = Math.max(lowBin + 1, freqToBinFor(data, VOICE_BAND.high));
+  const raw     = averageBinsFor(data, lowBin, highBin) / 255;
+  const target  = Math.min(1, raw * 1.8 * getSensitivity() * 0.7);
+  const rate    = target > voiceEnvelope ? 0.5 : 0.12; // snappy attack, easing release
+  voiceEnvelope += (target - voiceEnvelope) * rate;
+}
+
+function drawHologramMan(frame, t) {
+  const { primary, secondary } = getFaceColors();
+  const bass     = frame.bass || 0;
+  const treble   = frame.bandEnergies[frame.bandEnergies.length - 1] || 0;
+  const mouth    = voiceEnvelope;
+  const beatKick = frame.beatStrength || 0;
+
+  const minDim = Math.min(canvas.width, canvas.height);
+  const W = minDim * 0.26, H = minDim * 0.40;
+  const sway    = Math.sin(t * 0.45) * 8 * (0.4 + bass * 0.6);
+  const cx      = canvas.width / 2 + sway;
+  const cy      = canvas.height / 2 - canvas.height * 0.03;
+  const breathe = 1 + Math.sin(t * 0.8) * 0.012 + bass * 0.025 + beatKick * 0.02;
+
+  // Angular head silhouette — forehead → temple → cheekbone → jaw → chin.
+  // (An earlier version used a full oval + a big detached halo ring, which
+  // read as a fur-trimmed hood. This one tapers to a chin and keeps the
+  // glow clipped inside the silhouette, so it reads as a face, not a hood.)
+  const pts = [
+    [0,          -H * 0.50],   // crown
+    [W * 0.30,   -H * 0.34],   // right temple
+    [W * 0.34,   -H * 0.02],   // right cheekbone
+    [W * 0.20,    H * 0.30],   // right jaw
+    [0,           H * 0.46],   // chin
+    [-W * 0.20,   H * 0.30],   // left jaw
+    [-W * 0.34,  -H * 0.02],   // left cheekbone
+    [-W * 0.30,  -H * 0.34],   // left temple
+  ];
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(breathe, breathe);
+
+  function tracePts() {
+    ctx.beginPath();
+    pts.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
+    ctx.closePath();
+  }
+
+  // Soft glow filled INSIDE the silhouette only — no detached halo ring
+  tracePts();
+  ctx.save();
+  ctx.clip();
+  const innerGlow = ctx.createRadialGradient(0, -H * 0.1, W * 0.1, 0, 0, W * 0.9);
+  innerGlow.addColorStop(0, hexToRgba(primary, 0.10 + bass * 0.10));
+  innerGlow.addColorStop(1, hexToRgba(primary, 0));
+  ctx.fillStyle = innerGlow;
+  ctx.fillRect(-W, -H, W * 2, H * 2);
+  ctx.restore();
+
+  ctx.lineCap  = "round";
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = hexToRgba(primary, 0.85);
+  ctx.shadowColor  = primary;
+  ctx.shadowBlur   = 10 + bass * 8 + beatKick * 6;
+  ctx.lineWidth    = 1.5;
+  tracePts();
+  ctx.stroke();
+
+  // brow
+  ctx.beginPath();
+  ctx.moveTo(-W * 0.24, -H * 0.14);
+  ctx.quadraticCurveTo(0, -H * 0.20, W * 0.24, -H * 0.14);
+  ctx.stroke();
+
+  // nose bridge
+  ctx.beginPath();
+  ctx.moveTo(0, -H * 0.10);
+  ctx.lineTo(0, H * 0.04);
+  ctx.stroke();
+
+  // cheekbone accents
+  ctx.beginPath();
+  ctx.moveTo(-W * 0.30, -H * 0.02); ctx.lineTo(-W * 0.20, H * 0.06);
+  ctx.moveTo(W * 0.30, -H * 0.02);  ctx.lineTo(W * 0.20, H * 0.06);
+  ctx.stroke();
+
+  // eyes — brighten with Layer 1's treble
+  const eyeGlow = 0.45 + treble * 0.55;
+  ctx.fillStyle = hexToRgba(secondary, eyeGlow);
+  ctx.shadowBlur = 8 + treble * 16;
+  [-1, 1].forEach(side => {
+    ctx.beginPath();
+    ctx.ellipse(side * W * 0.15, -H * 0.06, W * 0.04, H * 0.02 + treble * 0.01 * H, 0, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // mouth — driven entirely by the Layer 2 voice envelope
+  const mouthW = W * 0.20;
+  const mouthH = 2 + mouth * H * 0.10;
+  ctx.beginPath();
+  ctx.strokeStyle = hexToRgba(primary, 0.9);
+  ctx.shadowBlur  = 8 + mouth * 14;
+  ctx.lineWidth   = 1.6;
+  ctx.ellipse(0, H * 0.24, mouthW, mouthH, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  if (mouth > 0.12) {
+    ctx.fillStyle = hexToRgba(primary, 0.10 + mouth * 0.16);
+    ctx.fill();
+  }
+
+  // scan lines — clipped to the silhouette, slow vertical drift
+  ctx.save();
+  tracePts();
+  ctx.clip();
+  ctx.globalAlpha = 0.14;
+  ctx.strokeStyle = primary;
+  ctx.shadowBlur = 0;
+  ctx.lineWidth = 1;
+  const scanSpacing = H / 8;
+  const offset = (t * 20) % scanSpacing;
+  for (let y = -H / 2 - scanSpacing + offset; y < H / 2; y += scanSpacing) {
+    ctx.beginPath();
+    ctx.moveTo(-W / 2, y);
+    ctx.lineTo(W / 2, y);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // beat halo — thin ring pulse on kick, same convention as the jellyfish styles
+  if (beatKick > 0.03) {
+    ctx.beginPath();
+    ctx.strokeStyle = hexToRgba(primary, 0.10 + beatKick * 0.22);
+    ctx.lineWidth = 1.5 + beatKick * 3;
+    ctx.shadowBlur = 16;
+    ctx.shadowColor = primary;
+    ctx.arc(0, 0, W * (0.75 + beatKick * 0.25), 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+  ctx.shadowBlur = 0;
+}
+
+const FACE_LAYERS = {
+  hologramMan: {
+    name: "Hologram Man",
+    description: "Wireframe male hologram head. Mouth follows the L2 Input; eyes/aura follow Layer 1's audio and beat.",
+    draw: drawHologramMan
+  }
+};
+Object.entries(FACE_LAYERS).forEach(([id, layer]) => {
+  VisualizerModules.register("faceLayers", {
+    id,
+    name: layer.name || id,
+    description: layer.description || "",
+    draw: layer.draw
+  });
+});
+
+function drawFaceLayer(frame, t) {
+  const layerDef = VisualizerModules.get("faceLayers", faceLayerSelect.value);
+  if (layerDef && typeof layerDef.draw === "function") {
+    layerDef.draw(frame, t);
+  }
+}
+
+// ═══════════════════════════════════════════════════════
 //  STAGE 4 — POST-PROCESS EFFECTS
 //  Runs AFTER the visualizer draws to the canvas.
 //  Each effect reads the current canvas pixels and writes back.
@@ -2942,17 +3294,28 @@ function draw(now=0) {
     ctx.translate(-canvas.width / 2, -canvas.height / 2);
   }
 
-// Stage 3 — Style
-const styleDef =
-  VisualizerModules.get("styles", style) ||
-  VisualizerModules.get("styles", "bars");
+// Stage 3 — Layer 1 (Shape)
+if (style === "none") {
+  clearCanvas(false); // no shape drawn, but canvas/trails still need clearing
+} else {
+  const styleDef =
+    VisualizerModules.get("styles", style) ||
+    VisualizerModules.get("styles", "bars");
 
-if (styleDef && typeof styleDef.draw === "function") {
-  styleDef.draw(frame, t);
+  if (styleDef && typeof styleDef.draw === "function") {
+    styleDef.draw(frame, t);
+  }
 }
 
 if (doShake || doScale) ctx.restore();
-	
+
+  // Stage 3B — Layer 2 (Face) — overlays on top of Layer 1, outside the
+  // beat shake/scale transform so it stays independently stable.
+  if (faceLayerSelect.value !== "none") {
+    updateVoiceEnvelope();
+    drawFaceLayer(frame, t);
+  }
+
   // Stage 4 — Post FX
   applyPostFx(frame, t);
 }
@@ -2964,14 +3327,25 @@ async function loadDevices() {
   try {
     const devices    = await navigator.mediaDevices.enumerateDevices();
     const audioInputs= devices.filter(d=>d.kind==="audioinput");
+
     deviceSelect.innerHTML = "";
     const def = document.createElement("option"); def.value=""; def.textContent="Default mic / VB Cable";
     deviceSelect.appendChild(def);
+
+    voiceDeviceSelect.innerHTML = "";
+    const sameAsL1 = document.createElement("option"); sameAsL1.value=""; sameAsL1.textContent="Same as Layer 1";
+    voiceDeviceSelect.appendChild(sameAsL1);
+
     audioInputs.forEach((d,i) => {
-      const o = document.createElement("option"); o.value=d.deviceId; o.textContent=d.label||`Microphone ${i+1}`;
+      const label = d.label || `Microphone ${i+1}`;
+      const o = document.createElement("option"); o.value=d.deviceId; o.textContent=label;
       deviceSelect.appendChild(o);
+      const o2 = document.createElement("option"); o2.value=d.deviceId; o2.textContent=label;
+      voiceDeviceSelect.appendChild(o2);
     });
+
     deviceSelect.value = currentDeviceId;
+    voiceDeviceSelect.value = currentVoiceDeviceId;
   } catch(e) { console.error(e); }
 }
 
@@ -2979,13 +3353,69 @@ function cleanupAudio() {
   if (rafId !== null) {
     cancelAnimationFrame(rafId);
     rafId = null;
-  }	
+  }
   if (sourceNode)  { try{sourceNode.disconnect();}catch(e){} sourceNode=null; }
   if (sourceGain)  { try{sourceGain.disconnect();}catch(e){} sourceGain=null; }
   if (analyser)    { try{analyser.disconnect();}catch(e){} analyser=null; }
   if (silentGain)  { try{silentGain.disconnect();}catch(e){} silentGain=null; }
   if (mediaStream) { mediaStream.getTracks().forEach(t=>t.stop()); mediaStream=null; }
   freqData=null; timeData=null;
+}
+
+// ─── Layer 2 Input chain (dedicated lipsync mic/cable) ───
+function stopVoiceInput() {
+  if (voiceSourceNode)  { try{voiceSourceNode.disconnect();}catch(e){} voiceSourceNode=null; }
+  if (voiceGain)        { try{voiceGain.disconnect();}catch(e){} voiceGain=null; }
+  if (voiceAnalyser)    { try{voiceAnalyser.disconnect();}catch(e){} voiceAnalyser=null; }
+  if (voiceMute)        { try{voiceMute.disconnect();}catch(e){} voiceMute=null; }
+  if (voiceMediaStream) { voiceMediaStream.getTracks().forEach(t=>t.stop()); voiceMediaStream=null; }
+  voiceFreqData=null;
+}
+
+async function startVoiceInput(deviceId) {
+  stopVoiceInput();
+  if (!deviceId || !audioCtx) return;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        deviceId: { exact: deviceId },
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false
+      }
+    });
+    voiceMediaStream = stream;
+
+    voiceAnalyser = audioCtx.createAnalyser();
+    voiceAnalyser.fftSize = 1024;
+    voiceAnalyser.smoothingTimeConstant = 0.55;
+    voiceAnalyser.minDecibels = -90;
+    voiceAnalyser.maxDecibels = -10;
+    voiceFreqData = new Uint8Array(voiceAnalyser.frequencyBinCount);
+
+    voiceSourceNode = audioCtx.createMediaStreamSource(voiceMediaStream);
+    voiceGain = audioCtx.createGain();
+    voiceGain.gain.value = 1;
+    voiceMute = audioCtx.createGain();
+    voiceMute.gain.value = 0;
+
+    voiceSourceNode.connect(voiceGain);
+    voiceGain.connect(voiceAnalyser);
+    voiceAnalyser.connect(voiceMute);
+    voiceMute.connect(audioCtx.destination);
+  } catch (err) {
+    console.error(err);
+    setStatus("L2 input error", "error");
+  }
+}
+
+// Starts/stops the dedicated Layer 2 Input chain based on whether a Face
+// is active and whether a distinct device is picked for it.
+function maybeStartVoiceInput() {
+  currentVoiceDeviceId = voiceDeviceSelect.value;
+  const wantsFace = faceLayerSelect.value !== "none";
+  if (!wantsFace || !currentVoiceDeviceId) { stopVoiceInput(); return; }
+  startVoiceInput(currentVoiceDeviceId);
 }
 
 function setupAnalyserFromStream(stream) {
@@ -3017,6 +3447,7 @@ sourceNode = audioCtx.createMediaStreamSource(mediaStream);
 
   setStatus("Live ✦", "active");
   pokeUI();
+  maybeStartVoiceInput();
   draw();
 }
 
@@ -3126,6 +3557,8 @@ async function startVisualizer(deviceId = "") {
 
 function stopVisualizer() {
   cleanupAudio();
+  stopVoiceInput();
+  voiceEnvelope = 0;
   beat.reset();
   startBtn.disabled = false;
   startBtn.classList.remove("running");
@@ -3183,6 +3616,20 @@ visualizerSelect.addEventListener("change",() => { clearCanvas(true); pokeUI(); 
 behaviourSelect.addEventListener("change", () => { updateIntensityVisibility(); clearCanvas(true); pokeUI(); });
 postFxSelect.addEventListener("change",    () => { clearCanvas(true); pokeUI(); });
 
+faceLayerSelect.addEventListener("change", () => {
+  updateFaceLayerUI();
+  if (!stopBtn.disabled) maybeStartVoiceInput();
+  clearCanvas(true);
+  pokeUI();
+});
+voiceDeviceSelect.addEventListener("change", () => {
+  if (!stopBtn.disabled) maybeStartVoiceInput();
+  else currentVoiceDeviceId = voiceDeviceSelect.value;
+  pokeUI();
+});
+faceColorSelect.addEventListener("change", () => { pokeUI(); });
+faceColorSwatch.addEventListener("input", () => { faceColorSelect.value = "custom"; pokeUI(); });
+
 sensitivitySlider.addEventListener("input", () => {
   sensitivityValue.textContent = Number(sensitivitySlider.value).toFixed(1); pokeUI();
 });
@@ -3204,9 +3651,10 @@ if (navigator.mediaDevices?.addEventListener) {
 
 // ─── Init ───
 populateSelectFromRegistry(behaviourSelect, VisualizerModules.behaviours, "rigid");
-populateSelectFromRegistry(visualizerSelect, VisualizerModules.styles, "bars");
+populateStyleSelectFromRegistry("bars");
 populateSelectFromRegistry(postFxSelect, VisualizerModules.postFx, "none");
 populatePaletteSelectFromRegistry("neon");
+populateFaceLayerSelectFromRegistry("none");
 
 sensitivityValue.textContent = sensitivitySlider.value;
 inputBoostValue.textContent = Number(inputBoostSlider.value).toFixed(1);
@@ -3215,6 +3663,7 @@ effectValue.textContent      = effectSlider.value;
 currentBandColors = getPaletteColors("neon", getBandCount());
 renderBandColorEditors();
 updateIntensityVisibility();
+updateFaceLayerUI();
 updateSourceModeUI();
 loadDevices();
 clearCanvas(true);
